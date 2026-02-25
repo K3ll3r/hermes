@@ -1,6 +1,10 @@
 # Platform Details
 
-Platform-specific behavior: webview engines and deployment. See **[architecture.md](architecture.md)** for the service daemon design, gRPC protocol, and window positioning.
+**[← Wiki Home](Home)** · [Usage](Usage) · [Architecture](Architecture) · [Development](Development)
+
+Platform-specific behavior: webview engines and deployment. See **[Architecture](Architecture)** for the service daemon design, gRPC protocol, and window positioning.
+
+---
 
 ## Webview engines
 
@@ -9,6 +13,8 @@ Platform-specific behavior: webview engines and deployment. See **[architecture.
 | Windows | WebView2 (Edge/Chromium) |
 | macOS | WKWebView (Safari) |
 | Linux | WebKitGTK |
+
+---
 
 ## Deployment
 
@@ -20,6 +26,6 @@ The `hermes serve` daemon runs **per-user** in the desktop session. Install an a
 | macOS | LaunchAgent | `~/Library/LaunchAgents/com.tseknet.hermes.plist` |
 | Linux | systemd user unit | `~/.config/systemd/user/hermes.service` |
 
-See **[architecture.md — Deployment](architecture.md#deployment)** for copy-pasteable configs.
+See **[Architecture — Deployment](Architecture#deployment)** for copy-pasteable configs.
 
 Deployment tooling (scripts, config management, MDM profiles) drops the binary and the autostart config. The daemon itself requires no elevated privileges.

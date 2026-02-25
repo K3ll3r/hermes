@@ -79,12 +79,9 @@ The service tracks deferrals per notification, persisted to disk. When the user 
 | **Branding** | OS-controlled | Fully yours -- colors, layout, fonts |
 | **Portability** | Rewrite per platform | Single HTML/CSS/JS, ships in the binary |
 
-## Docs
+## Documentation
 
-- **[Usage](docs/usage.md)** -- JSON config, subcommands, flags, exit codes, deferrals
-- **[Architecture](docs/architecture.md)** -- service daemon, gRPC, deployment, package map
-- **[Development](docs/development.md)** -- building, testing, and iterating per platform
-- **[Platform details](docs/platforms.md)** -- webview engines and deployment per OS
+**[📚 Wiki](https://github.com/TsekNet/hermes/wiki)** — Usage, Architecture, Development, Platforms. Wiki source lives in `wiki/` in this repo.
 
 ## Contributing
 

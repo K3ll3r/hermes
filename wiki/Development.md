@@ -1,6 +1,10 @@
 # Development
 
+**[← Wiki Home](Home)** · [Usage](Usage) · [Architecture](Architecture) · [Platforms](Platforms)
+
 How to build, test, and iterate on notifications for each platform.
+
+---
 
 ## Prerequisites
 
@@ -17,6 +21,8 @@ Platform-specific webview requirements:
 | Windows | WebView2 | Included with Windows 10+ (Edge) |
 | macOS | WKWebView | Included with macOS |
 | Linux | WebKitGTK | `apt install libwebkit2gtk-4.1-dev` |
+
+---
 
 ## Building
 
@@ -46,6 +52,8 @@ wails build -windowsconsole
 wails build -platform windows/amd64 -windowsconsole
 ```
 
+---
+
 ## Dev mode (live reload)
 
 Wails has a dev mode that hot-reloads the frontend and rebuilds Go on change:
@@ -55,6 +63,8 @@ wails dev
 ```
 
 This opens a webview that auto-refreshes when you edit HTML/CSS/JS in `frontend/`. Go changes trigger a rebuild. Useful for iterating on notification layout and styling.
+
+---
 
 ## Testing notifications
 
@@ -181,6 +191,8 @@ hermes list
 hermes cancel <id>
 ```
 
+---
+
 ## Testing the JSON config
 
 Use the bundled templates in `testdata/` as starting points:
@@ -208,10 +220,11 @@ echo "User chose: $(hermes --local testdata/restart-notification.json)"
 echo "Exit code: $?"
 ```
 
+---
+
 ## Testing deferrals
 
-Deferrals require the service daemon. State is persisted to a local bbolt database,
-so notifications survive service restarts.
+Deferrals require the service daemon. State is persisted to a local bbolt database, so notifications survive service restarts.
 
 ```bash
 hermes serve &
@@ -256,6 +269,8 @@ Override the database path with `--db` for isolated testing:
 hermes serve --db /tmp/hermes-test.db
 ```
 
+---
+
 ## Running tests
 
 ```bash
@@ -273,9 +288,9 @@ go test -race -tags webkit2_41 ./internal/server/
 go vet -tags webkit2_41 ./...
 ```
 
-> **Note:** The `-tags webkit2_41` flag is only required on Linux (Ubuntu 24.04+) where
-> `libwebkit2gtk-4.1-dev` replaces the older `4.0` package. On macOS and Windows, the
-> flag is harmless but unnecessary.
+> **Note:** The `-tags webkit2_41` flag is only required on Linux (Ubuntu 24.04+) where `libwebkit2gtk-4.1-dev` replaces the older `4.0` package. On macOS and Windows, the flag is harmless but unnecessary.
+
+---
 
 ## Regenerating protobuf code
 
@@ -291,6 +306,8 @@ Requires `protoc-gen-go` and `protoc-gen-go-grpc`:
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 ```
+
+---
 
 ## Modifying the frontend
 

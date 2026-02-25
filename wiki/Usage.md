@@ -1,11 +1,15 @@
 # Usage
 
+**[← Wiki Home](Home)** · [Architecture](Architecture) · [Development](Development) · [Platforms](Platforms)
+
+---
+
 ## Service mode (recommended)
 
 Start the per-user service daemon, then submit notifications via CLI. The service manages the full lifecycle: UI launch, deferrals, and deadlines.
 
 ```bash
-# Start the per-user service daemon (see architecture.md for autostart setup)
+# Start the per-user service daemon (see Architecture for autostart setup)
 hermes serve
 
 # Send a notification (blocks until user responds)
@@ -21,6 +25,8 @@ hermes list
 hermes cancel <notification-id>
 ```
 
+---
+
 ## Local mode
 
 For testing or single-session use, render directly without the service:
@@ -30,6 +36,8 @@ hermes --local '{"heading":"Test","message":"Local test."}'
 hermes --local notification.json
 echo '{"heading":"..."}' | hermes --local
 ```
+
+---
 
 ## JSON config
 
@@ -94,9 +102,11 @@ When using the service daemon, configure deferrals to control how long and how m
 }
 ```
 
-Defer values must match the pattern `defer_Xh`, `defer_Xd`, `defer_Xm` or `defer_Xs` (hours, days, minutes, seconds). The service parses these to schedule re-notification. Deferral state is persisted to disk so notifications survive service restarts (see [architecture.md](architecture.md#persistence)).
+Defer values must match the pattern `defer_Xh`, `defer_Xd`, `defer_Xm` or `defer_Xs` (hours, days, minutes, seconds). The service parses these to schedule re-notification. Deferral state is persisted to disk so notifications survive service restarts (see [Architecture — Persistence](Architecture#persistence)).
 
 When `maxDefers` is reached or `deferDeadline` has passed, hermes automatically hides any buttons (or dropdown options) that trigger a deferral. If a button has no other action (e.g. it was purely a defer button), it is removed entirely. This forces the user to choose a non-deferral action (e.g. "Restart Now") or let the timeout expire.
+
+---
 
 ## Subcommands
 
@@ -109,6 +119,8 @@ When `maxDefers` is reached or `deferDeadline` has passed, hermes automatically 
 | `hermes demo` | Show a demo notification |
 | `hermes version` | Print version, build date, Go, and OS info |
 
+---
+
 ## Flags
 
 | Flag | Scope | Description |
@@ -116,8 +128,10 @@ When `maxDefers` is reached or `deferDeadline` has passed, hermes automatically 
 | `--config <json>` | root | JSON config (file path or inline) — routes to service |
 | `--local` | root | Render locally in current session (skip service) |
 | `--port <int>` | serve, notify, list, cancel | gRPC port (default: 4770) |
-| `--db <path>` | serve | Bolt database path (default: platform-specific, see [architecture.md](architecture.md#persistence)) |
+| `--db <path>` | serve | Bolt database path (default: platform-specific, see [Architecture](Architecture#persistence)) |
 | `--help` | all | Print help |
+
+---
 
 ## Exit codes
 
@@ -128,9 +142,9 @@ When `maxDefers` is reached or `deferDeadline` has passed, hermes automatically 
 | `200` | User deferred (response on stdout, starts with `defer`) |
 | `202` | Timeout (countdown expired, auto-actioned per config) |
 
-**Detecting dismissals:** Exit `0` with **empty stdout** means the user dismissed
-the notification (ESC / window close) without choosing an action. Scripts should
-check both the exit code and stdout content.
+**Detecting dismissals:** Exit `0` with **empty stdout** means the user dismissed the notification (ESC / window close) without choosing an action. Scripts should check both the exit code and stdout content.
+
+---
 
 ## Input methods
 
@@ -157,8 +171,7 @@ echo '{"heading":"Update","message":"Please restart."}' | hermes notify
 
 ### PowerShell (recommended: pipe via stdin)
 
-PowerShell 5.1 strips inner double quotes when passing strings to native
-executables. Piping via stdin avoids this entirely:
+PowerShell 5.1 strips inner double quotes when passing strings to native executables. Piping via stdin avoids this entirely:
 
 ```powershell
 $config = @'
@@ -178,6 +191,8 @@ $config = @'
 
 $config | & hermes.exe notify
 ```
+
+---
 
 ## Example templates
 

@@ -1,5 +1,9 @@
 # Architecture
 
+**[← Wiki Home](Home)** · [Usage](Usage) · [Development](Development) · [Platforms](Platforms)
+
+---
+
 ## Design principle
 
 The notification UI is a web page, not a native dialog. HTML, CSS, and JavaScript are compiled into the Go binary via `embed` and rendered through [Wails v2](https://wails.io) in a platform-native webview (WebView2 on Windows, WKWebView on macOS, WebKitGTK on Linux). This means one UI codebase that looks identical on every OS, styled with standard web tech, with zero external dependencies at runtime.
@@ -12,6 +16,8 @@ The notification UI is a web page, not a native dialog. HTML, CSS, and JavaScrip
 | [Cobra](https://github.com/spf13/cobra) | CLI framework (flags, subcommands, help) |
 | [google/deck](https://github.com/google/deck) | Structured logging (stderr, Windows Event Log, syslog) |
 | [gRPC](https://grpc.io) | Service<->CLI and service<->UI communication |
+
+---
 
 ## Service daemon architecture
 
@@ -30,6 +36,8 @@ sequenceDiagram
     Note over Service: Deferral? Internal timer, re-launch UI later
 ```
 
+---
+
 ## Notification lifecycle
 
 1. **Submit** — CLI sends config via `Notify` RPC. Manager generates an ID, stores the notification, and blocks the RPC.
@@ -39,6 +47,8 @@ sequenceDiagram
 5. **Deadline** — If `deferDeadline` is set and the deadline passes, the notification auto-actions with `timeoutValue`.
 6. **Cancel** — External `Cancel` RPC removes the notification and unblocks the `Notify` RPC.
 
+---
+
 ## Deferral management
 
 - **DeferDeadline**: Maximum time from first notification (e.g., `"24h"`, `"7d"`). After this, no more deferrals.
@@ -46,7 +56,7 @@ sequenceDiagram
 - **Re-notification**: When a defer timer fires, the service re-launches the UI subprocess directly.
 - **Deadline enforcement**: If the deadline passes while deferred, the next re-show attempt auto-actions instead.
 
-### Persistence
+### Persistence {#persistence}
 
 Deferral state is persisted to a local [bbolt](https://github.com/etcd-io/bbolt) database (single file, zero config). On startup, `hermes serve` restores any in-flight notifications and re-shows them immediately.
 
@@ -59,6 +69,8 @@ Deferral state is persisted to a local [bbolt](https://github.com/etcd-io/bbolt)
 Override with `hermes serve --db /path/to/hermes.db`.
 
 **What survives a restart:** notification config, defer count, deadline, state. **What doesn't:** in-memory timer offsets (restored notifications are re-shown immediately on startup rather than waiting for the remaining deferral period).
+
+---
 
 ## Packages
 
@@ -103,6 +115,8 @@ hermes/
 
 The `internal/` packages import only Go stdlib and each other — no Wails dependency except `internal/app`. This means `go test ./internal/...` works without Node.js, WebKit, or a display server.
 
+---
+
 ## gRPC transport
 
 All IPC uses gRPC over TCP on `127.0.0.1:4770` (configurable via `--port`). No TLS — localhost only. The service binds to the loopback interface exclusively.
@@ -117,7 +131,9 @@ RPCs:
 | `Cancel` | CLI → Service | Cancel an active notification |
 | `List` | CLI → Service | List active notifications |
 
-## Deployment
+---
+
+## Deployment {#deployment}
 
 The service daemon runs **per-user** — each user who needs notifications should have `hermes serve` started at login. This is a deployment concern, not built into hermes itself.
 
@@ -173,6 +189,8 @@ Then enable: `systemctl --user enable --now hermes.service`
 
 Each user runs their own `hermes serve` on the default port. Only one instance can bind port 4770 per user (loopback). For concurrent multi-user sessions on the same machine, configure different ports via `--port`.
 
+---
+
 ## Window positioning
 
 Positioning is handled entirely from Go using Wails runtime APIs. This avoids DPI/coordinate-system mismatches that occur when mixing JavaScript `screen.availWidth` with Wails' `WindowSetPosition` (which is work-area-relative on Windows).
@@ -191,6 +209,8 @@ The algorithm uses `WindowCenter()` as a reference point, then derives the notif
 | macOS | Top-right | Cocoa y-axis is flipped (large y = top) |
 | Linux | Top-right | GTK uses y-down, so `y` is explicitly set to `margin` |
 
+---
+
 ## Web UI
 
 The frontend is vanilla HTML/CSS/JS — no framework, no bundler, no node_modules. CSS uses custom properties (`--accent`) set at runtime from `accentColor` in the config.
@@ -202,6 +222,8 @@ JS communicates with Go through Wails runtime bindings:
 - `window.go.app.App.Respond(value)` — send the response (button click or timeout)
 - `window.go.app.App.OpenHelp()` — open help URL in system browser
 
+---
+
 ## Building
 
-See **[development.md](development.md)** for build instructions, platform-specific testing, and dev workflow.
+See **[Development](Development)** for build instructions, platform-specific testing, and dev workflow.
