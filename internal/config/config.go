@@ -110,10 +110,10 @@ func (c *NotificationConfig) ApplyDefaults() {
 		c.TimeoutSeconds = 300
 	}
 	if c.Title == "" {
-		c.Title = "Notification"
+		c.Title = "NVIDIA IT"
 	}
 	if c.AccentColor == "" {
-		c.AccentColor = "#D4AF37"
+		c.AccentColor = "#76B900"
 	}
 	if c.EscValue == "" && c.TimeoutValue != "" {
 		c.EscValue = c.TimeoutValue

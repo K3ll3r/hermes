@@ -35,7 +35,7 @@
       document.documentElement.style.setProperty("--btn-primary-bg", cfg.accentColor);
     }
 
-    document.getElementById("title").textContent = cfg.title || "Notification";
+    document.getElementById("title").textContent = cfg.title || "NVIDIA IT";
     document.getElementById("heading").textContent = cfg.heading || "";
     document.getElementById("message").textContent = cfg.message || "";
 

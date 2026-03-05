@@ -21,19 +21,19 @@ func demoConfig() *config.NotificationConfig {
 	cfg := &config.NotificationConfig{
 		Heading:        "Welcome to Hermes",
 		Message:        "Your cross-platform notification system is ready. Click a button below or press ESC to close.",
-		Title:          "HERMES",
-		AccentColor:    "#D4AF37",
+		Title:          "NVIDIA IT",
+		AccentColor:    "#76B900",
 		TimeoutSeconds: 60,
 		TimeoutValue:   "timeout",
 		EscValue:       "dismiss",
-		HelpURL:        "https://github.com/TsekNet/hermes",
+		HelpURL:        "https://gitlab.com/dtsekhanskiy/hermes",
 		Buttons: []config.Button{
 			{
 				Label: "Explore",
 				Style: "secondary",
 				Dropdown: []config.DropdownOption{
-					{Label: "View Docs", Value: "url:https://github.com/TsekNet/hermes#readme"},
-					{Label: "View Source", Value: "url:https://github.com/TsekNet/hermes"},
+					{Label: "View Docs", Value: "url:https://gitlab.com/dtsekhanskiy/hermes#readme"},
+					{Label: "View Source", Value: "url:https://gitlab.com/dtsekhanskiy/hermes"},
 				},
 			},
 			{Label: "Got it", Value: "ok", Style: "primary"},
