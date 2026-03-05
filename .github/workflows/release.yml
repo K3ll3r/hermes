@@ -59,27 +59,25 @@ jobs:
           fi
           eval wails build $BUILD_FLAGS
 
-      - name: Rename binary
+      - name: Package for Fleet TUF
         shell: bash
         run: |
-          OUT="hermes_${{ matrix.goos }}_${{ matrix.goarch }}"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            mv build/bin/hermes.exe "${OUT}.exe"
-          elif [ -f build/bin/hermes ]; then
-            mv build/bin/hermes "$OUT"
-            chmod +x "$OUT"
-          elif [ -f build/bin/hermes.app/Contents/MacOS/hermes ]; then
-            mv build/bin/hermes.app/Contents/MacOS/hermes "$OUT"
-            chmod +x "$OUT"
-          else
-            echo "ERROR: binary not found" && ls -laR build/bin/ && exit 1
+          mkdir -p dist
+          if [ "${{ matrix.goos }}" = "darwin" ]; then
+            cd build/bin
+            tar czf ../../dist/hermes_${{ matrix.goarch }}.app.tar.gz hermes.app
+          elif [ "${{ matrix.goos }}" = "windows" ]; then
+            cp build/bin/hermes.exe dist/hermes.exe
+          elif [ "${{ matrix.goos }}" = "linux" ]; then
+            cp build/bin/hermes dist/hermes
+            chmod +x dist/hermes
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: hermes-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: hermes_${{ matrix.goos }}_${{ matrix.goarch }}*
+          path: dist/*
 
   publish:
     needs: build
@@ -95,7 +93,7 @@ jobs:
 
       - name: Generate checksums
         working-directory: dist
-        run: sha256sum hermes_* > checksums.txt
+        run: sha256sum * > checksums.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
