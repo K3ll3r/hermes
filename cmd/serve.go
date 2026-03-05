@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/TsekNet/hermes/internal/auth"
+	"github.com/TsekNet/hermes/internal/config"
+	"github.com/TsekNet/hermes/internal/exitcodes"
 	"github.com/TsekNet/hermes/internal/manager"
 	"github.com/TsekNet/hermes/internal/ratelimit"
 	"github.com/TsekNet/hermes/internal/server"
@@ -82,8 +84,124 @@ func runServe(_ *cobra.Command, _ []string) error {
 		srv.Stop()
 	}()
 
+	go drainQueue(mgr, s)
+
 	deck.Infof("hermes service starting on port %d (per-user daemon, pid %d)", flagPort, os.Getpid())
 	return srv.Serve()
+}
+
+// drainDelay is the breathing room between queued notifications so the
+// user isn't overwhelmed after returning from extended absence.
+const drainDelay = 30 * time.Second
+
+// drainQueue processes notifications that were submitted while the service
+// was offline. Notifications are shown one at a time: submit, wait for
+// the user to respond, pause, repeat. Expired records are discarded.
+func drainQueue(mgr *manager.Manager, s *store.Store) {
+	// Let restored (in-progress) notifications get some airtime first.
+	time.Sleep(drainDelay)
+
+	records, err := s.LoadQueue()
+	if err != nil {
+		deck.Errorf("drain queue: %v", err)
+		return
+	}
+	if len(records) == 0 {
+		return
+	}
+
+	records = sortByDependencies(records)
+	deck.Infof("draining %d queued notification(s) (dependency + priority ordered)", len(records))
+	locale := config.DetectLocale()
+	now := time.Now()
+
+	for _, r := range records {
+		r.Config.ApplyLocale(locale)
+		r.Config.ApplyDefaults()
+		if err := r.Config.Validate(); err != nil {
+			deck.Warningf("drain: invalid queued notification %s, discarding: %v", r.ID, err)
+			s.DeleteQueued(r.ID)
+			continue
+		}
+		if now.After(r.ExpiresAt) {
+			deck.Infof("drain: expired queued notification %s (queued %s, expired %s)",
+				r.ID, r.QueuedAt.Format(time.DateOnly), r.ExpiresAt.Format(time.DateOnly))
+			s.SaveHistory(&store.HistoryRecord{
+				ID:            r.ID,
+				Config:        r.Config,
+				ResponseValue: "expired_while_queued",
+				CreatedAt:     r.QueuedAt,
+				CompletedAt:   now,
+			})
+			s.DeleteQueued(r.ID)
+			continue
+		}
+
+		// Delete from queue before submit to prevent double-delivery
+		// if the daemon crashes mid-drain. At-most-once > at-least-once
+		// for user-facing notifications.
+		s.DeleteQueued(r.ID)
+
+		id, resultCh := mgr.Submit(r.Config)
+		if id == "" {
+			// Rejected (duplicate ID from restore, or at capacity).
+			<-resultCh
+			deck.Warningf("drain: queued notification %s rejected by manager, skipping", r.ID)
+			s.SaveHistory(&store.HistoryRecord{
+				ID:            r.ID,
+				Config:        r.Config,
+				ResponseValue: "rejected_from_queue",
+				CreatedAt:     r.QueuedAt,
+				CompletedAt:   time.Now(),
+			})
+			continue
+		}
+
+		deck.Infof("drain: submitted queued notification %s (heading=%q, priority=%d, queued %s)",
+			id, r.Config.Heading, r.Priority, r.QueuedAt.Format(time.DateOnly))
+
+		result := <-resultCh
+		deck.Infof("drain: queued notification %s completed with %q (exit %d)",
+			id, result.Value, result.ExitCode)
+
+		if result.ExitCode != exitcodes.Deferred {
+			time.Sleep(drainDelay)
+		}
+	}
+
+	deck.Infof("queue drain complete")
+}
+
+// sortByDependencies reorders queue records so that if A depends on B
+// and both are in the queue, B is drained before A. Within a dependency
+// level, the original priority/time ordering is preserved.
+func sortByDependencies(records []*store.QueueRecord) []*store.QueueRecord {
+	byConfigID := make(map[string]int, len(records))
+	for i, r := range records {
+		if r.Config.ID != "" {
+			byConfigID[r.Config.ID] = i
+		}
+	}
+	visited := make([]bool, len(records))
+	sorted := make([]*store.QueueRecord, 0, len(records))
+
+	var visit func(i int)
+	visit = func(i int) {
+		if visited[i] {
+			return
+		}
+		visited[i] = true
+		if dep := records[i].Config.DependsOn; dep != "" {
+			if j, ok := byConfigID[dep]; ok {
+				visit(j)
+			}
+		}
+		sorted = append(sorted, records[i])
+	}
+	for i := range records {
+		visit(i)
+	}
+	return sorted
 }
 
 // reshowNotification is called by the manager when a deferred notification's

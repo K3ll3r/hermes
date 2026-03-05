@@ -412,7 +412,9 @@ func TestDND_SkipWhenDNDActive(t *testing.T) {
 
 func TestDND_RespectWaitsForDNDClear(t *testing.T) {
 	t.Parallel()
+	saved := DNDPollInterval
 	DNDPollInterval = 10 * time.Millisecond
+	defer func() { DNDPollInterval = saved }()
 
 	var calls int
 	var mu sync.Mutex
@@ -442,6 +444,82 @@ func TestDND_RespectWaitsForDNDClear(t *testing.T) {
 	}
 	if pollCount < 4 {
 		t.Errorf("dndChecker polled %d times, want >= 4", pollCount)
+	}
+}
+
+func TestSubmit_DependsOn_Waits(t *testing.T) {
+	t.Parallel()
+	mgr := New(func(n *Notification) {}, nil)
+
+	cfgA := testConfig("Step A")
+	cfgA.ID = "step-a"
+	idA, _ := mgr.Submit(cfgA)
+
+	cfgB := testConfig("Step B")
+	cfgB.ID = "step-b"
+	cfgB.DependsOn = "step-a"
+	idB, _ := mgr.Submit(cfgB)
+
+	if idB == "" {
+		t.Fatal("expected non-empty ID for dependent notification")
+	}
+
+	infos := mgr.List()
+	for _, info := range infos {
+		if info.ID == idB && info.State != StateWaiting {
+			t.Errorf("state = %q, want waiting_on_dependency", info.State)
+		}
+	}
+
+	mgr.ReportChoice(idA, "ok")
+
+	time.Sleep(200 * time.Millisecond)
+	infos = mgr.List()
+	for _, info := range infos {
+		if info.ID == idB && info.State == StateWaiting {
+			t.Error("notification B should no longer be waiting after A completes")
+		}
+	}
+}
+
+func TestSubmit_DependsOn_SelfRef_Ignored(t *testing.T) {
+	t.Parallel()
+	var shown atomic.Bool
+	mgr := New(func(n *Notification) { shown.Store(true) }, nil)
+
+	cfg := testConfig("Self Ref")
+	cfg.ID = "self"
+	cfg.DependsOn = "self"
+	id, _ := mgr.Submit(cfg)
+
+	if id == "" {
+		t.Fatal("expected non-empty ID")
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	if !shown.Load() {
+		t.Error("self-referencing dependsOn should be ignored, notification should launch")
+	}
+}
+
+func TestSubmit_DependsOn_CircularIgnored(t *testing.T) {
+	t.Parallel()
+	var shown int32
+	mgr := New(func(n *Notification) { atomic.AddInt32(&shown, 1) }, nil)
+
+	cfgA := testConfig("Circular A")
+	cfgA.ID = "circ-a"
+	cfgA.DependsOn = "circ-b"
+	mgr.Submit(cfgA)
+
+	cfgB := testConfig("Circular B")
+	cfgB.ID = "circ-b"
+	cfgB.DependsOn = "circ-a"
+	mgr.Submit(cfgB)
+
+	time.Sleep(200 * time.Millisecond)
+	if atomic.LoadInt32(&shown) < 1 {
+		t.Error("at least one notification should launch despite circular deps")
 	}
 }
 

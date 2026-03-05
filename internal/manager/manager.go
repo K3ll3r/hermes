@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/TsekNet/hermes/internal/action"
 	"github.com/TsekNet/hermes/internal/config"
 	"github.com/TsekNet/hermes/internal/dnd"
 	"github.com/TsekNet/hermes/internal/exitcodes"
@@ -21,6 +22,10 @@ import (
 // waiting for DND to clear. Exported for testing.
 var DNDPollInterval = 60 * time.Second
 
+// QuietHoursPollInterval is how often the manager re-checks quiet hours
+// when waiting for the quiet window to end. Exported for testing.
+var QuietHoursPollInterval = 60 * time.Second
+
 // State describes where a notification is in its lifecycle.
 type State string
 
@@ -29,6 +34,7 @@ const (
 	StateDeferred State = "deferred"
 	StateActive   State = "awaiting_response"
 	StateDone     State = "done"
+	StateWaiting  State = "waiting_on_dependency"
 )
 
 // Notification is the service-side representation of a notification.
@@ -124,7 +130,7 @@ func (m *Manager) Restore() int {
 		deck.Infof("manager: restored notification %s heading=%q defers=%d", n.ID, n.Config.Heading, n.DeferCount)
 
 		// Kick a reshow immediately — the user was waiting for this.
-		go m.launchWithDND(n)
+		go m.launchWithChecks(n)
 	}
 	return restored
 }
@@ -181,10 +187,24 @@ func (m *Manager) Submit(cfg *config.NotificationConfig) (string, <-chan Result)
 
 	m.active[id] = n
 	m.persist(n)
-	deck.Infof("manager: submitted notification %s heading=%q", id, cfg.Heading)
+	deck.Infof("manager: submitted notification %s heading=%q priority=%d", id, cfg.Heading, cfg.Priority)
 
-	// Launch the UI (DND-aware).
-	go m.launchWithDND(n)
+	// Dependency check: hold if dependency not yet met.
+	if cfg.DependsOn != "" {
+		if cfg.DependsOn == id {
+			deck.Warningf("manager: notification %s has self-referencing dependsOn, ignoring", id)
+		} else if m.hasCircularDependency(id, cfg.DependsOn) {
+			deck.Warningf("manager: notification %s would create circular dependency via %q, ignoring", id, cfg.DependsOn)
+		} else if !m.isDependencyMetLocked(cfg.DependsOn) {
+			n.State = StateWaiting
+			m.persist(n)
+			deck.Infof("manager: notification %s waiting on dependency %q", id, cfg.DependsOn)
+			return id, n.result
+		}
+	}
+
+	// Launch the UI (DND + quiet-hours aware).
+	go m.launchWithChecks(n)
 
 	return id, n.result
 }
@@ -340,10 +360,12 @@ func (m *Manager) handleDeferLocked(n *Notification, value string) bool {
 		m.mu.Lock()
 		if n.State == StateDeferred {
 			n.State = StatePending
-			deck.Infof("manager: re-showing notification %s after deferral", n.ID)
+			// Apply escalation: mutate config based on cumulative defer count.
+			n.Config.ApplyEscalation(n.DeferCount)
+			deck.Infof("manager: re-showing notification %s after deferral (defers=%d)", n.ID, n.DeferCount)
 		}
 		m.mu.Unlock()
-		m.launchWithDND(n)
+		m.launchWithChecks(n)
 	})
 
 	return true
@@ -375,6 +397,14 @@ func (m *Manager) completeLocked(n *Notification, value string) bool {
 		}
 		m.store.Delete(n.ID)
 	}
+
+	// Dispatch result action (action chaining) in background.
+	if n.Config.ResultActions != nil && !strings.HasPrefix(value, "defer") && value != "cancelled" {
+		go m.dispatchResultAction(n, value)
+	}
+
+	// Unblock any notifications waiting on this one as a dependency.
+	m.checkWaitingDependenciesLocked(n.ID)
 
 	// Clean up in-memory after a short delay to avoid races with late UI reports.
 	go func() {
@@ -409,14 +439,47 @@ func (m *Manager) persist(n *Notification) {
 	}
 }
 
+// shouldAbortLocked checks if a notification has been completed or its
+// deadline has passed. Returns true if the caller should stop waiting.
+// Must be called with mu held. Caller must unlock after return.
+func (m *Manager) shouldAbortLocked(n *Notification, context string) bool {
+	if n.State == StateDone {
+		return true
+	}
+	if !n.Deadline.IsZero() && time.Now().After(n.Deadline) {
+		deck.Warningf("manager: deadline passed for %s during %s, auto-actioning", n.ID, context)
+		m.completeLocked(n, n.Config.TimeoutValue)
+		return true
+	}
+	return false
+}
 
-// launchWithDND checks DND status before launching the UI, respecting the
-// notification's DND policy. Must be called in its own goroutine.
-func (m *Manager) launchWithDND(n *Notification) {
+// launchWithChecks runs DND and quiet-hours checks before launching the UI.
+// Must be called in its own goroutine.
+func (m *Manager) launchWithChecks(n *Notification) {
 	if m.onReshow == nil {
 		return
 	}
 
+	// Quiet hours gate: wait until the quiet window ends.
+	for n.Config.QuietHours.IsActive() {
+		wait := n.Config.QuietHours.UntilEnd()
+		if wait <= 0 {
+			wait = QuietHoursPollInterval
+		}
+		deck.Infof("manager: quiet hours active for %s, sleeping %s", n.ID, wait)
+
+		m.mu.Lock()
+		if m.shouldAbortLocked(n, "quiet hours") {
+			m.mu.Unlock()
+			return
+		}
+		m.mu.Unlock()
+
+		time.Sleep(wait)
+	}
+
+	// DND gate (existing logic).
 	switch n.Config.ResolvedDND() {
 	case config.DNDIgnore:
 		m.onReshow(n)
@@ -438,13 +501,7 @@ func (m *Manager) launchWithDND(n *Notification) {
 			deck.Infof("manager: DND active, waiting to show %s (dnd=respect)", n.ID)
 
 			m.mu.Lock()
-			if n.State == StateDone {
-				m.mu.Unlock()
-				return
-			}
-			if !n.Deadline.IsZero() && time.Now().After(n.Deadline) {
-				deck.Warningf("manager: deadline passed for %s while waiting for DND, auto-actioning", n.ID)
-				m.completeLocked(n, n.Config.TimeoutValue)
+			if m.shouldAbortLocked(n, "DND wait") {
 				m.mu.Unlock()
 				return
 			}
@@ -460,6 +517,71 @@ func (m *Manager) launchWithDND(n *Notification) {
 		}
 		m.mu.Unlock()
 		m.onReshow(n)
+	}
+}
+
+// dispatchResultAction runs the action mapped to the user's response value.
+func (m *Manager) dispatchResultAction(n *Notification, value string) {
+	// Strip timeout: prefix for matching — "timeout:restart" should match "restart".
+	matchValue := strings.TrimPrefix(value, "timeout:")
+
+	actionStr, ok := n.Config.ResultActions[matchValue]
+	if !ok {
+		return
+	}
+	deck.Infof("manager: dispatching result action for %s: %q -> %q", n.ID, matchValue, actionStr)
+	if err := action.Dispatch(actionStr); err != nil {
+		deck.Errorf("manager: result action for %s failed: %v", n.ID, err)
+	}
+}
+
+// isDependencyMetLocked checks if a dependency notification has completed.
+// Must be called with mu held.
+func (m *Manager) isDependencyMetLocked(depID string) bool {
+	if n, ok := m.active[depID]; ok {
+		return n.State == StateDone
+	}
+	// Check history for previously completed notifications.
+	if m.store != nil {
+		records, _ := m.store.LoadHistory()
+		for _, r := range records {
+			if r.ID == depID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// hasCircularDependency checks if adding a dependency from id -> depID
+// would create a cycle. Must be called with mu held.
+func (m *Manager) hasCircularDependency(id, depID string) bool {
+	visited := map[string]bool{id: true}
+	current := depID
+	for current != "" {
+		if visited[current] {
+			return true
+		}
+		visited[current] = true
+		n, ok := m.active[current]
+		if !ok || n.Config.DependsOn == "" {
+			return false
+		}
+		current = n.Config.DependsOn
+	}
+	return false
+}
+
+// checkWaitingDependenciesLocked unblocks notifications that depend on
+// the just-completed notification ID. Must be called with mu held.
+func (m *Manager) checkWaitingDependenciesLocked(completedID string) {
+	for _, n := range m.active {
+		if n.State == StateWaiting && n.Config.DependsOn == completedID {
+			n.State = StatePending
+			m.persist(n)
+			deck.Infof("manager: dependency %q satisfied, unblocking notification %s", completedID, n.ID)
+			go m.launchWithChecks(n)
+		}
 	}
 }
 

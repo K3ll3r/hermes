@@ -11,6 +11,7 @@ const (
 	Error    int32 = 1   // Bad config, validation, or launch failure
 	Deferred int32 = 200 // User deferred
 	Timeout  int32 = 202 // Countdown expired, auto-actioned
+	Queued   int32 = 203 // Service unreachable, notification saved for later delivery
 )
 
 // ForValue maps a user response string to the appropriate exit code.

@@ -5,12 +5,14 @@
 package action
 
 import (
+	"fmt"
 	"net/url"
 	"os/exec"
 	"runtime"
 	"strings"
 
 	"github.com/google/deck"
+	"github.com/pkg/browser"
 )
 
 // Kind describes what category a response value falls into.
@@ -120,6 +122,33 @@ func CommandString(value string) string {
 // RunCommand executes a cmd:-prefixed value via the platform shell.
 func RunCommand(value string) (string, error) {
 	return RunCommandOn(value, runtime.GOOS)
+}
+
+// Dispatch executes an action string from the server side (no Wails context).
+// Handles url:, cmd:, and platform settings prefixes. Returns nil for plain
+// values that don't match any action prefix. Used by the manager for
+// resultActions (action chaining after notification completion).
+func Dispatch(value string) error {
+	// Strip "url:" wrapper — same as the frontend app layer does.
+	if strings.HasPrefix(value, "url:") {
+		uri := strings.TrimPrefix(value, "url:")
+		if !Allowed(uri) {
+			return fmt.Errorf("blocked URI: %s", uri)
+		}
+		deck.Infof("action: dispatch url %q", uri)
+		return browser.OpenURL(uri)
+	}
+	if IsCommand(value) {
+		if !Allowed(value) {
+			return fmt.Errorf("blocked command: %s", value)
+		}
+		out, err := RunCommand(value)
+		if err != nil {
+			return fmt.Errorf("command failed: %w: %s", err, out)
+		}
+		return nil
+	}
+	return nil
 }
 
 // RunCommandOn executes a cmd:-prefixed value using the shell for the given OS.

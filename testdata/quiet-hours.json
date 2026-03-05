@@ -1,0 +1,21 @@
+{
+  "heading": "Software Update Available",
+  "message": "A new version of the security agent is available. Click Update to install.",
+  "timeout": 300,
+  "timeoutValue": "defer_4h",
+  "title": "NVIDIA IT",
+  "accentColor": "#76B900",
+  "priority": 5,
+  "quietHours": {
+    "start": "22:00",
+    "end": "07:00",
+    "timezone": "America/Los_Angeles"
+  },
+  "buttons": [
+    { "label": "Update Now", "value": "update", "style": "primary" },
+    { "label": "Defer 4h", "value": "defer_4h", "style": "secondary" }
+  ],
+  "resultActions": {
+    "update": "url:https://github.com/TsekNet/hermes"
+  }
+}

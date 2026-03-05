@@ -254,6 +254,51 @@ func TestRunCommand(t *testing.T) {
 	})
 }
 
+func TestDispatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("plain value returns nil", func(t *testing.T) {
+		t.Parallel()
+		if err := Dispatch("restart"); err != nil {
+			t.Errorf("Dispatch(plain) = %v, want nil", err)
+		}
+	})
+
+	t.Run("empty value returns nil", func(t *testing.T) {
+		t.Parallel()
+		if err := Dispatch(""); err != nil {
+			t.Errorf("Dispatch(empty) = %v, want nil", err)
+		}
+	})
+
+	if runtime.GOOS != "windows" {
+		t.Run("cmd echo succeeds", func(t *testing.T) {
+			t.Parallel()
+			if err := Dispatch("cmd:echo dispatch_test"); err != nil {
+				t.Errorf("Dispatch(cmd:echo) = %v", err)
+			}
+		})
+
+		t.Run("cmd bad command fails", func(t *testing.T) {
+			t.Parallel()
+			if err := Dispatch("cmd:__nonexistent_xyz__"); err == nil {
+				t.Error("expected error for bad command")
+			}
+		})
+	}
+
+	t.Run("blocked URI returns error", func(t *testing.T) {
+		t.Parallel()
+		err := Dispatch("url:ftp://evil.com")
+		if err == nil {
+			t.Error("expected error for blocked URI")
+		}
+		if err != nil && !strings.Contains(err.Error(), "blocked") {
+			t.Errorf("error = %q, want contains 'blocked'", err)
+		}
+	})
+}
+
 func TestRunCommandOn(t *testing.T) {
 	t.Parallel()
 

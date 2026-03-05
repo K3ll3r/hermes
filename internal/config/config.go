@@ -54,6 +54,128 @@ type NotificationConfig struct {
 	//   "ignore"  — show the notification regardless (use for critical alerts).
 	//   "skip"    — silently complete with value "dnd_active" when DND is on.
 	DND string `json:"dnd,omitempty"`
+
+	// Priority controls delivery order when multiple notifications are pending.
+	// Range: 0 (low) to 10 (critical). Default: 5 (applied by ApplyDefaults
+	// when the field is zero/omitted). Higher priority notifications are shown
+	// first during queue drain.
+	Priority int `json:"priority,omitempty"`
+
+	// Escalation defines progressive urgency steps applied as the user
+	// repeatedly defers. Each threshold mutates the notification's appearance
+	// and timing when the defer count meets or exceeds AfterDefers.
+	Escalation []EscalationStep `json:"escalation,omitempty"`
+
+	// ResultActions maps response values to automatic follow-up actions.
+	// Keys are button values (e.g. "restart"), values use the same prefix
+	// scheme as buttons: "cmd:shutdown /r /t 60", "url:https://...".
+	// The action is dispatched server-side after the notification completes.
+	ResultActions map[string]string `json:"resultActions,omitempty"`
+
+	// QuietHours suppresses notification delivery during specified hours.
+	// The manager delays delivery until the quiet window ends (like DND).
+	QuietHours *QuietHours `json:"quietHours,omitempty"`
+
+	// HeadingLocalized maps BCP-47 language codes to localized heading text.
+	// At runtime, the resolved locale (--locale flag or OS detection)
+	// selects the best match. Falls back to Heading if no match.
+	HeadingLocalized map[string]string `json:"headingLocalized,omitempty"`
+
+	// MessageLocalized maps BCP-47 language codes to localized message text.
+	MessageLocalized map[string]string `json:"messageLocalized,omitempty"`
+
+	// DependsOn is the ID of a notification that must complete before this
+	// one is shown. The manager holds this notification in a waiting state
+	// until the dependency is satisfied.
+	DependsOn string `json:"dependsOn,omitempty"`
+}
+
+// EscalationStep defines a mutation applied to the notification after
+// a certain number of deferrals.
+type EscalationStep struct {
+	// AfterDefers is the minimum defer count that activates this step.
+	AfterDefers int `json:"afterDefers"`
+	// Timeout overrides TimeoutSeconds (shorter = more urgent).
+	Timeout int `json:"timeout,omitempty"`
+	// AccentColor overrides the notification's accent color.
+	AccentColor string `json:"accentColor,omitempty"`
+	// MessageSuffix is appended to the message (e.g. urgency warning).
+	MessageSuffix string `json:"messageSuffix,omitempty"`
+}
+
+// QuietHours defines a daily window during which notifications are delayed.
+type QuietHours struct {
+	// Start is the beginning of the quiet window in "HH:MM" 24-hour format.
+	Start string `json:"start"`
+	// End is the end of the quiet window in "HH:MM" 24-hour format.
+	End string `json:"end"`
+	// Timezone is an IANA timezone string (e.g. "America/Los_Angeles").
+	// Defaults to local time if empty.
+	Timezone string `json:"timezone,omitempty"`
+}
+
+// IsActive reports whether the current time falls within the quiet window.
+func (q *QuietHours) IsActive() bool {
+	if q == nil {
+		return false
+	}
+	loc := time.Local
+	if q.Timezone != "" {
+		var err error
+		loc, err = time.LoadLocation(q.Timezone)
+		if err != nil {
+			return false
+		}
+	}
+	now := time.Now().In(loc)
+	start, sok := parseTimeOfDay(q.Start)
+	end, eok := parseTimeOfDay(q.End)
+	if !sok || !eok {
+		return false
+	}
+	cur := now.Hour()*60 + now.Minute()
+	if start <= end {
+		return cur >= start && cur < end
+	}
+	// Overnight range (e.g. 22:00–07:00).
+	return cur >= start || cur < end
+}
+
+// UntilEnd returns how long until the quiet window ends.
+// Returns 0 if quiet hours are not active.
+func (q *QuietHours) UntilEnd() time.Duration {
+	if q == nil || !q.IsActive() {
+		return 0
+	}
+	loc := time.Local
+	if q.Timezone != "" {
+		if l, err := time.LoadLocation(q.Timezone); err == nil {
+			loc = l
+		}
+	}
+	now := time.Now().In(loc)
+	end, ok := parseTimeOfDay(q.End)
+	if !ok {
+		return 0
+	}
+	endTime := time.Date(now.Year(), now.Month(), now.Day(), end/60, end%60, 0, 0, loc)
+	if endTime.Before(now) {
+		endTime = endTime.Add(24 * time.Hour)
+	}
+	return endTime.Sub(now)
+}
+
+func parseTimeOfDay(s string) (int, bool) {
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) != 2 {
+		return 0, false
+	}
+	h, err1 := strconv.Atoi(parts[0])
+	m, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, false
+	}
+	return h*60 + m, true
 }
 
 // DND mode constants.
@@ -121,6 +243,9 @@ func (c *NotificationConfig) ApplyDefaults() {
 	if c.DND == "" {
 		c.DND = DNDRespect
 	}
+	if c.Priority == 0 {
+		c.Priority = 5
+	}
 	for i := range c.Buttons {
 		if c.Buttons[i].Style == "" {
 			c.Buttons[i].Style = "secondary"
@@ -128,6 +253,75 @@ func (c *NotificationConfig) ApplyDefaults() {
 		if c.Buttons[i].Value == "" && len(c.Buttons[i].Dropdown) == 0 {
 			c.Buttons[i].Value = strings.ToLower(strings.ReplaceAll(c.Buttons[i].Label, " ", "_"))
 		}
+	}
+}
+
+// ApplyLocale replaces Heading and Message with localized versions if
+// a match exists for the given locale. Tries exact match first ("ja"),
+// then prefix match ("ja" matches "ja-JP" key), then falls back to
+// the original text.
+func (c *NotificationConfig) ApplyLocale(locale string) {
+	if locale == "" {
+		return
+	}
+	locale = strings.ToLower(locale)
+	if v := matchLocale(c.HeadingLocalized, locale); v != "" {
+		c.Heading = v
+	}
+	if v := matchLocale(c.MessageLocalized, locale); v != "" {
+		c.Message = v
+	}
+}
+
+func matchLocale(m map[string]string, locale string) string {
+	if len(m) == 0 {
+		return ""
+	}
+	// Exact match.
+	if v, ok := m[locale]; ok {
+		return v
+	}
+	// Prefix match: "ja" matches "ja-jp", "ja_JP".
+	for k, v := range m {
+		if strings.HasPrefix(strings.ToLower(k), locale) {
+			return v
+		}
+	}
+	// Reverse prefix: "ja-JP" locale matches "ja" key.
+	prefix := strings.SplitN(locale, "-", 2)[0]
+	prefix = strings.SplitN(prefix, "_", 2)[0]
+	if prefix != locale {
+		if v, ok := m[prefix]; ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// ApplyEscalation mutates the config based on the current defer count.
+// The highest matching threshold wins. This is called by the manager
+// before re-showing a deferred notification.
+func (c *NotificationConfig) ApplyEscalation(deferCount int) {
+	if len(c.Escalation) == 0 || deferCount == 0 {
+		return
+	}
+	var active *EscalationStep
+	for i := range c.Escalation {
+		if deferCount >= c.Escalation[i].AfterDefers {
+			active = &c.Escalation[i]
+		}
+	}
+	if active == nil {
+		return
+	}
+	if active.Timeout > 0 {
+		c.TimeoutSeconds = active.Timeout
+	}
+	if active.AccentColor != "" {
+		c.AccentColor = active.AccentColor
+	}
+	if active.MessageSuffix != "" && !strings.HasSuffix(c.Message, active.MessageSuffix) {
+		c.Message += active.MessageSuffix
 	}
 }
 
@@ -185,6 +379,43 @@ func (c *NotificationConfig) Validate() error {
 		if strings.Contains(p, "..") {
 			errs = append(errs, fmt.Sprintf("watchPaths[%d]: path traversal (..) is not allowed", i))
 		}
+	}
+	if c.Priority < 0 || c.Priority > 10 {
+		errs = append(errs, fmt.Sprintf(`"priority" must be 0-10, got %d`, c.Priority))
+	}
+	for i, step := range c.Escalation {
+		if step.AfterDefers < 1 {
+			errs = append(errs, fmt.Sprintf("escalation[%d]: afterDefers must be >= 1", i))
+		}
+	}
+	if q := c.QuietHours; q != nil {
+		if _, ok := parseTimeOfDay(q.Start); !ok {
+			errs = append(errs, `quietHours.start must be "HH:MM" format`)
+		}
+		if _, ok := parseTimeOfDay(q.End); !ok {
+			errs = append(errs, `quietHours.end must be "HH:MM" format`)
+		}
+		if q.Timezone != "" {
+			if _, err := time.LoadLocation(q.Timezone); err != nil {
+				errs = append(errs, fmt.Sprintf("quietHours.timezone: %v", err))
+			}
+		}
+	}
+	if len(c.ResultActions) > 20 {
+		errs = append(errs, fmt.Sprintf("resultActions: %d entries exceeds maximum of 20", len(c.ResultActions)))
+	}
+	for k, v := range c.ResultActions {
+		if strings.ContainsAny(k, "\n\r") {
+			errs = append(errs, fmt.Sprintf("resultActions key %q: must not contain newlines", k))
+		}
+		lower := strings.ToLower(v)
+		if !strings.HasPrefix(lower, "cmd:") && !strings.HasPrefix(lower, "url:") &&
+			!strings.HasPrefix(lower, "https:") && !strings.HasPrefix(lower, "http:") {
+			errs = append(errs, fmt.Sprintf("resultActions[%q]: value must start with cmd:, url:, https:, or http:", k))
+		}
+	}
+	if c.DependsOn != "" && c.DependsOn == c.ID {
+		errs = append(errs, `"dependsOn" must not reference the notification's own ID`)
 	}
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))

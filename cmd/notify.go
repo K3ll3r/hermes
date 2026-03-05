@@ -34,17 +34,20 @@ Config can be a file path, inline JSON string, or piped via stdin.`,
 }
 
 func runNotify(_ *cobra.Command, args []string) error {
-	cfg, err := resolveConfig("", args)
+	cfg, err := resolveConfig(flagConfig, args)
 	if err != nil {
 		return err
 	}
 	if cfg == nil {
 		return fmt.Errorf("no config provided: pass as argument or pipe via stdin")
 	}
-	cfg.ApplyDefaults()
+	prepareConfig(cfg)
 
 	c, err := client.Dial(flagNotifyPort)
 	if err != nil {
+		if tryEnqueue(cfg, err) {
+			return nil
+		}
 		return fmt.Errorf("connect to service: %w", err)
 	}
 	defer c.Close()
@@ -52,6 +55,9 @@ func runNotify(_ *cobra.Command, args []string) error {
 	deck.Infof("sending notification to service on port %d", flagNotifyPort)
 	result, err := c.Notify(context.Background(), cfg)
 	if err != nil {
+		if tryEnqueue(cfg, err) {
+			return nil
+		}
 		return fmt.Errorf("notify: %w", err)
 	}
 	printResultAndExit(result)

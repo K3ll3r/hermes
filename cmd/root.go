@@ -17,6 +17,7 @@ import (
 	"github.com/TsekNet/hermes/internal/dnd"
 	"github.com/TsekNet/hermes/internal/exitcodes"
 	"github.com/TsekNet/hermes/internal/server"
+	"github.com/TsekNet/hermes/internal/store"
 	"github.com/google/deck"
 	"github.com/spf13/cobra"
 	"github.com/wailsapp/wails/v2"
@@ -32,6 +33,7 @@ var frontendAssets embed.FS
 var (
 	flagLocal          bool
 	flagConfig         string
+	flagLocale         string
 	flagNotificationID string
 	flagServicePort    int
 )
@@ -75,6 +77,7 @@ Use '--config' or '--local' to render directly without the service.`,
 	f := root.Flags()
 	f.BoolVar(&flagLocal, "local", false, "render locally in current session (skip service)")
 	f.StringVar(&flagConfig, "config", "", "JSON config (file path or inline JSON)")
+	f.StringVar(&flagLocale, "locale", "", "override locale for localized notifications (e.g. ja, de, es)")
 
 	// Hidden flags — set by the service when launching UI subprocesses.
 	f.StringVar(&flagNotificationID, "notification-id", "", "notification ID (set by service)")
@@ -110,7 +113,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 		if cfg == nil {
 			cfg = demoConfig()
 		}
-		cfg.ApplyDefaults()
+		prepareConfig(cfg)
 		if err := waitForDND(cfg); err != nil {
 			return err
 		}
@@ -121,7 +124,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 
 	// Mode 3: Config found → send to service.
 	if cfg != nil {
-		cfg.ApplyDefaults()
+		prepareConfig(cfg)
 		return sendToService(cfg)
 	}
 
@@ -155,19 +158,46 @@ func runDemo() error {
 }
 
 // sendToService sends a config to the gRPC service and blocks for the result.
+// If the service is unreachable, it falls back to the offline queue.
 func sendToService(cfg *config.NotificationConfig) error {
 	c, err := client.DialDefault()
 	if err != nil {
+		if tryEnqueue(cfg, err) {
+			return nil
+		}
 		return fmt.Errorf("connect to service: %w (is 'hermes serve' running?)", err)
 	}
 	defer c.Close()
 
 	result, err := c.Notify(context.Background(), cfg)
 	if err != nil {
+		if tryEnqueue(cfg, err) {
+			return nil
+		}
 		return fmt.Errorf("notify: %w", err)
 	}
 	printResultAndExit(result)
 	return nil
+}
+
+// tryEnqueue attempts to write a notification to the offline queue (bbolt).
+// The DB lock acts as a mutex: if the daemon holds it, Open fails and we
+// return false (the service IS running, so the gRPC error is "real").
+// If Open succeeds, the daemon is down and we persist for later delivery.
+func tryEnqueue(cfg *config.NotificationConfig, originalErr error) bool {
+	if err := cfg.Validate(); err != nil {
+		deck.Infof("queue fallback skipped (invalid config): %v", err)
+		return false
+	}
+	if err := store.EnqueueOffline("", cfg, store.DefaultQueueTTL); err != nil {
+		deck.Infof("queue fallback failed (service may be running): %v", err)
+		return false
+	}
+	deck.Infof("service unavailable (%v), notification queued for next startup", originalErr)
+	fmt.Print("queued")
+	os.Stdout.Sync()
+	os.Exit(int(exitcodes.Queued))
+	return true // unreachable, but keeps the signature clean
 }
 
 // printResultAndExit prints the service result to stdout and exits with
@@ -216,7 +246,7 @@ func runServiceUI(notifID string, port int) error {
 		OnStartup:     a.Startup,
 		OnShutdown:    a.Shutdown,
 		Bind:          []interface{}{a},
-		Windows:       &wopts.Options{IsZoomControlEnabled: false, DisableWindowIcon: true},
+		Windows:       &wopts.Options{IsZoomControlEnabled: false},
 	})
 	if err != nil {
 		deck.Errorf("wails: %v", err)
@@ -343,7 +373,7 @@ func runUI(cfg *config.NotificationConfig) {
 		OnStartup:     a.Startup,
 		OnShutdown:    a.Shutdown,
 		Bind:          []interface{}{a},
-		Windows:       &wopts.Options{IsZoomControlEnabled: false, DisableWindowIcon: true},
+		Windows:       &wopts.Options{IsZoomControlEnabled: false},
 	})
 	if err != nil {
 		deck.Errorf("wails: %v", err)
@@ -351,6 +381,16 @@ func runUI(cfg *config.NotificationConfig) {
 	}
 
 	respond(a.Result)
+}
+
+// prepareConfig applies defaults and locale resolution to a config.
+func prepareConfig(cfg *config.NotificationConfig) {
+	cfg.ApplyDefaults()
+	locale := flagLocale
+	if locale == "" {
+		locale = config.DetectLocale()
+	}
+	cfg.ApplyLocale(locale)
 }
 
 // respond prints the value to stdout and exits with the appropriate code.

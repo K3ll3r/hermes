@@ -76,6 +76,13 @@ hermes accepts a single JSON object with these fields:
 | `images` | array | no | `[]` | HTTPS URLs or `data:image/` URIs for a carousel (max 20, no SVG data URIs) |
 | `watchPaths` | array | no | `[]` | Filesystem paths to monitor for changes (max 10, no `..` traversal) |
 | `dnd` | string | no | `"respect"` | Do Not Disturb behavior: `"respect"`, `"ignore"`, or `"skip"` |
+| `priority` | int | no | `5` | Delivery priority (0-10). Higher = shown first in queue drain |
+| `escalation` | array | no | `[]` | Progressive urgency steps applied after repeated deferrals (see below) |
+| `resultActions` | object | no | `{}` | Maps response values to automatic actions (action chaining, see below) |
+| `quietHours` | object | no | `null` | Time-based delivery suppression (see below) |
+| `headingLocalized` | object | no | `{}` | Locale → heading text map for i18n |
+| `messageLocalized` | object | no | `{}` | Locale → message text map for i18n |
+| `dependsOn` | string | no | `""` | ID of notification that must complete first (sequential workflows) |
 
 ### Button format
 
@@ -233,6 +240,114 @@ hermes detects the OS Do Not Disturb / Focus mode on all platforms and adjusts n
 
 Detection is fail-open: if the API call fails or the platform is unsupported, hermes assumes DND is off and shows the notification.
 
+### Escalation ladder
+
+Define progressive urgency that mutates the notification each time the user defers past a threshold:
+
+```json
+{
+  "heading": "Restart Required",
+  "message": "Security updates need a restart.",
+  "maxDefers": 5,
+  "deferDeadline": "24h",
+  "escalation": [
+    {
+      "afterDefers": 2,
+      "timeout": 120,
+      "accentColor": "#FF6600",
+      "messageSuffix": "\n\nThis action is required soon."
+    },
+    {
+      "afterDefers": 4,
+      "timeout": 60,
+      "accentColor": "#FF0000",
+      "messageSuffix": "\n\nFINAL NOTICE: Action required immediately."
+    }
+  ]
+}
+```
+
+After 2 deferrals: timeout shortens to 120s, accent turns orange, warning appended. After 4: timeout 60s, accent red, final notice. The highest matching threshold wins.
+
+### Action chaining
+
+Map user responses to automatic follow-up actions. The action runs server-side after the notification completes:
+
+```json
+{
+  "buttons": [
+    {"label": "Restart Now", "value": "restart", "style": "primary"},
+    {"label": "Open Wiki", "value": "wiki", "style": "secondary"}
+  ],
+  "resultActions": {
+    "restart": "cmd:shutdown /r /t 60",
+    "wiki": "url:https://wiki.example.com/vpn"
+  }
+}
+```
+
+Supported prefixes: `cmd:` (shell command) and `url:` (opens in browser). Actions also fire on timeout if `timeoutValue` matches a key (e.g. `"timeout:restart"` matches `"restart"`).
+
+### Quiet hours
+
+Suppress notifications during specified hours. The service delays delivery until the window ends:
+
+```json
+{
+  "quietHours": {
+    "start": "22:00",
+    "end": "07:00",
+    "timezone": "America/Los_Angeles"
+  }
+}
+```
+
+Overnight ranges (start > end) are supported. Timezone defaults to local if omitted. Deadlines are still enforced — a notification past its deadline auto-actions even during quiet hours.
+
+### Localization
+
+Provide translated heading and message text. The resolved locale selects the best match:
+
+```json
+{
+  "heading": "Restart Required",
+  "headingLocalized": {
+    "ja": "再起動が必要です",
+    "de": "Neustart erforderlich",
+    "es": "Reinicio requerido"
+  },
+  "message": "Please restart to apply updates.",
+  "messageLocalized": {
+    "ja": "アップデートを適用するため再起動してください。",
+    "de": "Ihr Computer muss neu gestartet werden."
+  }
+}
+```
+
+Locale resolution order: `--locale` flag > `HERMES_LOCALE` env > `LANG` env > `"en"` fallback.
+
+Demo: `hermes --locale ja --local --config testdata/localized-restart.json`
+
+### Priority
+
+Control delivery order with `priority` (0=low, 10=critical, default 5). Higher priority notifications are delivered first during offline queue drain:
+
+```json
+{"heading": "Critical Patch", "priority": 10, "dnd": "ignore"}
+{"heading": "Training Reminder", "priority": 3}
+```
+
+### Notification dependencies
+
+Create multi-step workflows where notification B waits for notification A:
+
+```json
+{"id": "accept-eula", "heading": "Accept EULA", ...}
+{"id": "apply-update", "dependsOn": "accept-eula", "heading": "Install Update", ...}
+```
+
+The second notification is held in `waiting_on_dependency` state until the first completes. Submit both to the service — the manager handles sequencing automatically.
+
 ---
 
 ## Subcommands
@@ -256,6 +371,7 @@ Detection is fail-open: if the API call fails or the platform is unsupported, he
 |------|-------|-------------|
 | `--config <json>` | root | JSON config (file path or inline) — routes to service |
 | `--local` | root | Render locally in current session (skip service) |
+| `--locale <code>` | root | Override locale for localized notifications (e.g. `ja`, `de`) |
 | `--port <int>` | serve, notify, list, cancel | gRPC port (default: 4770) |
 | `--db <path>` | serve, inbox | Bolt database path (default: platform-specific, see [Architecture](architecture.md#persistence)) |
 | `--json` | inbox | Print history as JSON instead of opening the UI |
@@ -271,6 +387,7 @@ Detection is fail-open: if the API call fails or the platform is unsupported, he
 | `1` | Error (bad config, validation, or launch failure) |
 | `200` | User deferred (response on stdout, starts with `defer`) |
 | `202` | Timeout (countdown expired, auto-actioned per config) |
+| `203` | Queued (service unreachable, notification saved for later delivery; stdout: `queued`) |
 
 **Detecting dismissals:** Exit `0` with **empty stdout** means the user dismissed the notification (ESC / window close) without choosing an action. Scripts should check both the exit code and stdout content.
 
@@ -336,3 +453,10 @@ See `testdata/` for ready-to-use JSON configs:
 - `short-defer-deadline.json` — Very short deadline (1m) for testing auto-action
 - `image-carousel.json` — Multi-slide image carousel with placeholder images
 - `install-with-watch.json` — Filesystem watch for install receipt validation
+- `escalation-restart.json` — Escalation ladder: soft → firm → mandatory after repeated deferrals
+- `action-chaining.json` — Result actions: user response triggers automatic follow-up
+- `quiet-hours.json` — Time-based delivery suppression (22:00–07:00)
+- `localized-restart.json` — Multi-language restart (ja, de, es, fr, ko, zh)
+- `priority-critical.json` — Priority 10 critical alert (ignores DND, no defer)
+- `workflow-step1-eula.json` — Dependency chain step 1: accept EULA
+- `workflow-step2-update.json` — Dependency chain step 2: install update (waits for EULA)

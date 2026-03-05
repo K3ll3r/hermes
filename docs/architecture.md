@@ -38,12 +38,15 @@ sequenceDiagram
 ## Notification lifecycle
 
 1. **Submit** — CLI sends config via `Notify` RPC. Manager generates an ID, stores the notification, and blocks the RPC.
-2. **DND check** — Before launching the UI, the manager checks OS Do Not Disturb status. With `dnd=respect` (default), it polls every 60s until DND clears. With `dnd=ignore`, it proceeds immediately. With `dnd=skip`, it completes with `"dnd_active"`.
-3. **Launch** — Service launches a UI subprocess directly (same user session).
-4. **Response** — User clicks a button. UI reports choice via `ReportChoice` RPC. `Notify` RPC unblocks and returns the value.
-5. **Defer** — User defers. Manager increments defer count, starts an internal timer, and re-launches the UI when the timer fires. The DND check runs again before each re-show.
-6. **Deadline** — If `deferDeadline` is set and the deadline passes, the notification auto-actions with `timeoutValue`. Deadlines are enforced even while waiting for DND to clear.
-7. **Cancel** — External `Cancel` RPC removes the notification and unblocks the `Notify` RPC.
+2. **Dependency check** — If `dependsOn` is set, the notification enters `waiting_on_dependency` state until the dependency completes.
+3. **Quiet hours check** — If `quietHours` is configured and the current time falls within the window, the manager sleeps until the window ends. Deadlines are still enforced while waiting.
+4. **DND check** — Before launching the UI, the manager checks OS Do Not Disturb status. With `dnd=respect` (default), it polls every 60s until DND clears. With `dnd=ignore`, it proceeds immediately. With `dnd=skip`, it completes with `"dnd_active"`.
+5. **Launch** — Service launches a UI subprocess directly (same user session).
+6. **Response** — User clicks a button. UI reports choice via `ReportChoice` RPC. `Notify` RPC unblocks and returns the value.
+7. **Defer + Escalation** — User defers. Manager increments defer count, starts an internal timer, and re-launches the UI when the timer fires. If `escalation` thresholds are configured, the notification's appearance and timeout mutate progressively (shorter timeout, warning color, urgency text).
+8. **Action chaining** — When the notification completes, the manager checks `resultActions` for a mapping from the user's response value to an automatic action (`cmd:` or `url:` prefix). The action is dispatched server-side.
+9. **Deadline** — If `deferDeadline` is set and the deadline passes, the notification auto-actions with `timeoutValue`. Deadlines are enforced even while waiting for DND or quiet hours to clear.
+10. **Cancel** — External `Cancel` RPC removes the notification and unblocks the `Notify` RPC.
 
 ---
 
@@ -53,6 +56,105 @@ sequenceDiagram
 - **MaxDefers**: Maximum number of defer actions. 0 = unlimited (until deadline).
 - **Re-notification**: When a defer timer fires, the service re-launches the UI subprocess directly.
 - **Deadline enforcement**: If the deadline passes while deferred, the next re-show attempt auto-actions instead.
+
+### Escalation ladder
+
+The `escalation` array defines progressive urgency steps that mutate the notification each time the user defers past a threshold. The highest matching step (by `afterDefers`) wins.
+
+| Field | Effect |
+|-------|--------|
+| `afterDefers` | Minimum defer count to activate this step |
+| `timeout` | Override `TimeoutSeconds` (shorter = more urgent) |
+| `accentColor` | Override accent color (e.g. orange then red) |
+| `messageSuffix` | Appended to the message body (urgency warning text) |
+
+Escalation is applied in the manager before each re-show, so the user sees progressively more urgent versions of the same notification. See `testdata/escalation-restart.json` for a working example.
+
+---
+
+## Action chaining
+
+The `resultActions` map connects user responses to automatic follow-up actions. When a notification completes with a value that matches a key in `resultActions`, the manager dispatches the corresponding action server-side.
+
+```json
+{
+  "resultActions": {
+    "restart": "cmd:shutdown /r /t 60",
+    "wiki": "url:https://wiki.example.com/vpn-troubleshooting"
+  }
+}
+```
+
+Supported action prefixes: `cmd:` (shell command), `url:` (opens in default browser / system handler). The action runs in the service daemon process, not the UI subprocess.
+
+> **Security note:** `cmd:` actions execute with the same privileges as the `hermes serve` process (the logged-in user). Only trusted configs should define `resultActions`. Configs are validated on enqueue and drain, but the shell command itself is passed to `sh -c` / `cmd /C` without further sandboxing.
+
+---
+
+## Quiet hours
+
+The `quietHours` object defines a daily window during which notifications are delayed (like DND, but time-based). The manager sleeps until the quiet window ends, then proceeds with the normal DND check.
+
+```json
+{
+  "quietHours": {
+    "start": "22:00",
+    "end": "07:00",
+    "timezone": "America/Los_Angeles"
+  }
+}
+```
+
+- **Overnight ranges** are supported (start > end wraps past midnight).
+- **Timezone** defaults to the local system timezone if omitted.
+- **Deadlines** are still enforced during quiet hours — a notification will auto-action if its deadline passes.
+
+---
+
+## Localization
+
+Notifications support localized heading and message text via `headingLocalized` and `messageLocalized` maps. Keys are BCP-47-style language codes (e.g. `"ja"`, `"de"`, `"es"`).
+
+```json
+{
+  "heading": "Restart Required",
+  "headingLocalized": { "ja": "再起動が必要です", "de": "Neustart erforderlich" },
+  "message": "Please restart to apply updates.",
+  "messageLocalized": { "ja": "アップデートを適用するため再起動してください。" }
+}
+```
+
+At runtime, the locale is resolved in this order:
+1. `--locale` CLI flag (explicit override)
+2. `HERMES_LOCALE` environment variable
+3. `LANG` / `LC_MESSAGES` / `LANGUAGE` environment variables
+4. Falls back to `"en"` (uses the base `heading` and `message`)
+
+Matching tries exact code, then prefix (`"ja"` matches `"ja-JP"` key), then reverse prefix (`"ja-JP"` locale matches `"ja"` key).
+
+---
+
+## Notification dependencies
+
+The `dependsOn` field creates a sequential workflow: notification B is held in a `waiting_on_dependency` state until notification A (identified by `dependsOn` ID) completes.
+
+```json
+[
+  { "id": "accept-eula", "heading": "Accept EULA", ... },
+  { "id": "apply-update", "dependsOn": "accept-eula", "heading": "Install Update", ... }
+]
+```
+
+When the dependency completes, all waiting notifications are unblocked and proceed through the normal quiet-hours / DND / launch pipeline. Dependencies are checked against both the active notification set and the history store.
+
+---
+
+## Priority
+
+The `priority` field (0-10, default 5) controls delivery order when multiple notifications are pending. Higher values are shown first. Priority affects:
+
+- **Offline queue drain**: queued notifications are sorted by priority (descending), then by queue time (oldest first within the same priority).
+- **Future**: priority will control preemption of lower-priority active notifications.
 
 ### Persistence {#persistence}
 
@@ -73,6 +175,22 @@ Override with `hermes serve --db /path/to/hermes.db`.
 When a notification completes (user action, timeout, or cancellation), the manager saves a `HistoryRecord` to a separate `history` bbolt bucket. This powers the inbox feature (`hermes inbox`).
 
 On startup, the service prunes history records older than 30 days or exceeding 200 entries. The `PruneHistory` method enforces both age and count limits in a single pass.
+
+### Offline queue {#offline-queue}
+
+When the service daemon is not running (user on leave, machine off, session ended), `hermes notify` falls back to writing the notification config into a `queue` bbolt bucket in the same database file. The DB lock acts as a natural mutex: if the daemon holds it, the queue write fails and the original gRPC error is returned (the service IS running, so the error is "real"). If the DB is unlocked, the daemon is truly down and the notification is persisted for later.
+
+On the next `hermes serve` startup, the queue is drained serially — one notification at a time with a 30-second pause between each. This prevents overwhelming a user who returns after extended absence (e.g., paternity leave) with dozens of notifications at once.
+
+| Behavior | Detail |
+|----------|--------|
+| Queue TTL | 30 days (notifications older than this are expired on drain) |
+| Drain order | Priority (highest first), then oldest within same priority |
+| Drain pacing | Show one → wait for user response → 30s pause → next |
+| Dedup | Same notification ID is only queued once |
+| Exit code | `hermes notify` exits with **203** when queued (stdout: `queued`) |
+| Expired records | Saved to history as `expired_while_queued` |
+| Crash safety | Queue record deleted before submit (at-most-once delivery) |
 
 ---
 
@@ -109,7 +227,7 @@ hermes/
 │   ├── manager/                   Notification lifecycle (state, deferrals, deadlines, DND)
 │   ├── ratelimit/                 Token-bucket rate limiter for gRPC RPCs
 │   ├── server/                    gRPC server implementation
-│   ├── store/                     bbolt persistence (deferral state survives restarts)
+│   ├── store/                     bbolt persistence (deferral state + offline queue)
 │   ├── action/                    Button value dispatch (url:, cmd:, ms-settings:, x-apple.systempreferences:)
 │   └── watch/                     Filesystem monitoring (fsnotify wrapper)
 │

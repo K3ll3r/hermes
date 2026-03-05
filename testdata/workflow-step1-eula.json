@@ -1,0 +1,21 @@
+{
+  "heading": "End User License Agreement",
+  "message": "Please review and accept the updated EULA before proceeding with the system update. By clicking Accept, you agree to the terms.",
+  "id": "accept-eula",
+  "timeout": 600,
+  "timeoutValue": "defer_1h",
+  "title": "NVIDIA IT",
+  "accentColor": "#76B900",
+  "priority": 9,
+  "buttons": [
+    { "label": "Accept", "value": "accepted", "style": "primary" },
+    {
+      "label": "Defer",
+      "style": "secondary",
+      "dropdown": [
+        { "label": "1 Hour", "value": "defer_1h" },
+        { "label": "4 Hours", "value": "defer_4h" }
+      ]
+    }
+  ]
+}

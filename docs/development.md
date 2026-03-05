@@ -205,6 +205,13 @@ Use the bundled templates in `testdata/` as starting points:
 | `short-defer-deadline.json` | Very short deadline (1m) for testing auto-action |
 | `image-carousel.json` | Multi-slide image carousel |
 | `install-with-watch.json` | Filesystem watch for install receipt validation |
+| `escalation-restart.json` | Escalation ladder: soft → firm → mandatory after repeated deferrals |
+| `action-chaining.json` | Result actions: user response triggers automatic follow-up |
+| `quiet-hours.json` | Time-based delivery suppression (22:00–07:00) |
+| `localized-restart.json` | Multi-language restart (ja, de, es, fr, ko, zh) |
+| `priority-critical.json` | Priority 10 critical alert (ignores DND, no defer) |
+| `workflow-step1-eula.json` | Dependency chain step 1: accept EULA |
+| `workflow-step2-update.json` | Dependency chain step 2: install update (waits for EULA) |
 
 Edit a template, run it, tweak, repeat:
 

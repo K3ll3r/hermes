@@ -489,6 +489,379 @@ func TestLoadJSON_WatchPaths(t *testing.T) {
 	}
 }
 
+func TestApplyLocale(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		locale      string
+		headingMap  map[string]string
+		messageMap  map[string]string
+		wantHeading string
+		wantMessage string
+	}{
+		{
+			name:        "exact match",
+			locale:      "ja",
+			headingMap:  map[string]string{"ja": "再起動"},
+			wantHeading: "再起動",
+			wantMessage: "original",
+		},
+		{
+			name:        "prefix match",
+			locale:      "ja",
+			headingMap:  map[string]string{"ja-JP": "日本語"},
+			wantHeading: "日本語",
+			wantMessage: "original",
+		},
+		{
+			name:        "reverse prefix",
+			locale:      "ja-jp",
+			headingMap:  map[string]string{"ja": "日本語"},
+			wantHeading: "日本語",
+			wantMessage: "original",
+		},
+		{
+			name:        "no match falls back",
+			locale:      "fr",
+			headingMap:  map[string]string{"ja": "日本語"},
+			wantHeading: "original",
+			wantMessage: "original",
+		},
+		{
+			name:        "empty locale is no-op",
+			locale:      "",
+			headingMap:  map[string]string{"ja": "日本語"},
+			wantHeading: "original",
+			wantMessage: "original",
+		},
+		{
+			name:        "both heading and message",
+			locale:      "de",
+			headingMap:  map[string]string{"de": "Neustart"},
+			messageMap:  map[string]string{"de": "Bitte neu starten"},
+			wantHeading: "Neustart",
+			wantMessage: "Bitte neu starten",
+		},
+		{
+			name:        "nil maps",
+			locale:      "ja",
+			headingMap:  nil,
+			messageMap:  nil,
+			wantHeading: "original",
+			wantMessage: "original",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := NotificationConfig{
+				Heading:          "original",
+				Message:          "original",
+				HeadingLocalized: tt.headingMap,
+				MessageLocalized: tt.messageMap,
+			}
+			cfg.ApplyLocale(tt.locale)
+			if cfg.Heading != tt.wantHeading {
+				t.Errorf("heading = %q, want %q", cfg.Heading, tt.wantHeading)
+			}
+			if cfg.Message != tt.wantMessage {
+				t.Errorf("message = %q, want %q", cfg.Message, tt.wantMessage)
+			}
+		})
+	}
+}
+
+func TestApplyEscalation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		deferCount  int
+		steps       []EscalationStep
+		wantTimeout int
+		wantAccent  string
+		wantSuffix  bool
+	}{
+		{
+			name:        "no escalation steps",
+			deferCount:  5,
+			steps:       nil,
+			wantTimeout: 300,
+			wantAccent:  "#D4A843",
+		},
+		{
+			name:       "zero defer count is no-op",
+			deferCount: 0,
+			steps: []EscalationStep{
+				{AfterDefers: 1, Timeout: 60},
+			},
+			wantTimeout: 300,
+			wantAccent:  "#D4A843",
+		},
+		{
+			name:       "first threshold",
+			deferCount: 2,
+			steps: []EscalationStep{
+				{AfterDefers: 2, Timeout: 120, AccentColor: "#FF6600"},
+			},
+			wantTimeout: 120,
+			wantAccent:  "#FF6600",
+		},
+		{
+			name:       "highest matching threshold wins",
+			deferCount: 5,
+			steps: []EscalationStep{
+				{AfterDefers: 2, Timeout: 120, AccentColor: "#FF6600"},
+				{AfterDefers: 4, Timeout: 60, AccentColor: "#FF0000", MessageSuffix: "\n\nFINAL"},
+			},
+			wantTimeout: 60,
+			wantAccent:  "#FF0000",
+			wantSuffix:  true,
+		},
+		{
+			name:       "below all thresholds",
+			deferCount: 1,
+			steps: []EscalationStep{
+				{AfterDefers: 2, Timeout: 120},
+			},
+			wantTimeout: 300,
+			wantAccent:  "#D4A843",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := NotificationConfig{
+				TimeoutSeconds: 300,
+				AccentColor:    "#D4A843",
+				Message:        "base",
+				Escalation:     tt.steps,
+			}
+			cfg.ApplyEscalation(tt.deferCount)
+			if cfg.TimeoutSeconds != tt.wantTimeout {
+				t.Errorf("timeout = %d, want %d", cfg.TimeoutSeconds, tt.wantTimeout)
+			}
+			if cfg.AccentColor != tt.wantAccent {
+				t.Errorf("accent = %q, want %q", cfg.AccentColor, tt.wantAccent)
+			}
+			if tt.wantSuffix && !strings.Contains(cfg.Message, "FINAL") {
+				t.Errorf("message = %q, want suffix containing FINAL", cfg.Message)
+			}
+		})
+	}
+}
+
+func TestApplyEscalation_SuffixNotDuplicated(t *testing.T) {
+	t.Parallel()
+	cfg := NotificationConfig{
+		Message:    "base",
+		Escalation: []EscalationStep{{AfterDefers: 1, MessageSuffix: " [URGENT]"}},
+	}
+	cfg.ApplyEscalation(2)
+	cfg.ApplyEscalation(3)
+	count := strings.Count(cfg.Message, "[URGENT]")
+	if count != 1 {
+		t.Errorf("suffix appeared %d times, want 1", count)
+	}
+}
+
+func TestQuietHours_ParseTimeOfDay(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  int
+		ok    bool
+	}{
+		{"00:00", 0, true},
+		{"23:59", 23*60 + 59, true},
+		{"07:30", 7*60 + 30, true},
+		{"24:00", 0, false},
+		{"12:60", 0, false},
+		{"-1:00", 0, false},
+		{"abc", 0, false},
+		{"12", 0, false},
+		{"", 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+			got, ok := parseTimeOfDay(tt.input)
+			if ok != tt.ok {
+				t.Errorf("parseTimeOfDay(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if ok && got != tt.want {
+				t.Errorf("parseTimeOfDay(%q) = %d, want %d", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestQuietHours_IsActive_Nil(t *testing.T) {
+	t.Parallel()
+	var q *QuietHours
+	if q.IsActive() {
+		t.Error("nil QuietHours should not be active")
+	}
+}
+
+func TestQuietHours_UntilEnd_Nil(t *testing.T) {
+	t.Parallel()
+	var q *QuietHours
+	if d := q.UntilEnd(); d != 0 {
+		t.Errorf("nil QuietHours UntilEnd = %v, want 0", d)
+	}
+}
+
+func TestValidate_Priority(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		priority int
+		wantErr  bool
+	}{
+		{"valid 0", 0, false},
+		{"valid 5", 5, false},
+		{"valid 10", 10, false},
+		{"too low", -1, true},
+		{"too high", 11, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := NotificationConfig{Heading: "H", Message: "M", Priority: tt.priority}
+			err := cfg.Validate()
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidate_Escalation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		steps     []EscalationStep
+		wantErr   bool
+		errSubstr string
+	}{
+		{"valid", []EscalationStep{{AfterDefers: 2}}, false, ""},
+		{"afterDefers 0", []EscalationStep{{AfterDefers: 0}}, true, "afterDefers must be >= 1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := NotificationConfig{Heading: "H", Message: "M", Escalation: tt.steps}
+			err := cfg.Validate()
+			assertError(t, err, tt.wantErr, tt.errSubstr)
+		})
+	}
+}
+
+func TestValidate_QuietHours(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		qh        *QuietHours
+		wantErr   bool
+		errSubstr string
+	}{
+		{"nil is valid", nil, false, ""},
+		{"valid", &QuietHours{Start: "22:00", End: "07:00"}, false, ""},
+		{"bad start", &QuietHours{Start: "bad", End: "07:00"}, true, "quietHours.start"},
+		{"bad end", &QuietHours{Start: "22:00", End: "bad"}, true, "quietHours.end"},
+		{"bad timezone", &QuietHours{Start: "22:00", End: "07:00", Timezone: "Fake/Zone"}, true, "quietHours.timezone"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := NotificationConfig{Heading: "H", Message: "M", QuietHours: tt.qh}
+			err := cfg.Validate()
+			assertError(t, err, tt.wantErr, tt.errSubstr)
+		})
+	}
+}
+
+func TestValidate_ResultActions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		actions   map[string]string
+		wantErr   bool
+		errSubstr string
+	}{
+		{"nil is valid", nil, false, ""},
+		{"valid cmd", map[string]string{"restart": "cmd:shutdown /r /t 60"}, false, ""},
+		{"valid url", map[string]string{"wiki": "url:https://wiki.example.com"}, false, ""},
+		{"valid https", map[string]string{"wiki": "https://wiki.example.com"}, false, ""},
+		{"bad prefix", map[string]string{"restart": "ftp://evil.com"}, true, "resultActions"},
+		{"key with newline", map[string]string{"bad\nkey": "cmd:echo"}, true, "newlines"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := NotificationConfig{Heading: "H", Message: "M", ResultActions: tt.actions}
+			err := cfg.Validate()
+			assertError(t, err, tt.wantErr, tt.errSubstr)
+		})
+	}
+}
+
+func TestValidate_DependsOnSelfRef(t *testing.T) {
+	t.Parallel()
+	cfg := NotificationConfig{
+		Heading:   "H",
+		Message:   "M",
+		ID:        "my-id",
+		DependsOn: "my-id",
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error for self-referencing dependsOn")
+	}
+	if !strings.Contains(err.Error(), "own ID") {
+		t.Errorf("error %q missing 'own ID'", err)
+	}
+}
+
+func TestApplyDefaults_Priority(t *testing.T) {
+	t.Parallel()
+
+	t.Run("zero gets default 5", func(t *testing.T) {
+		t.Parallel()
+		cfg := NotificationConfig{}
+		cfg.ApplyDefaults()
+		if cfg.Priority != 5 {
+			t.Errorf("priority = %d, want 5", cfg.Priority)
+		}
+	})
+
+	t.Run("explicit value preserved", func(t *testing.T) {
+		t.Parallel()
+		cfg := NotificationConfig{Priority: 8}
+		cfg.ApplyDefaults()
+		if cfg.Priority != 8 {
+			t.Errorf("priority = %d, want 8", cfg.Priority)
+		}
+	})
+}
+
 func TestValidate_HTMLEscaping(t *testing.T) {
 	t.Parallel()
 	cfg := NotificationConfig{

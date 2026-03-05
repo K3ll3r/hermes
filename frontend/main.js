@@ -313,7 +313,12 @@
   }
 
   function onButtonClick(e) {
-    respond(e.target.getAttribute("data-value"));
+    var value = e.target.getAttribute("data-value");
+    if (value && value.indexOf("url:") === 0) {
+      if (Backend) Backend.Respond(value);
+      return;
+    }
+    respond(value);
   }
 
   function respond(value) {

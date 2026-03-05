@@ -1,0 +1,19 @@
+{
+  "heading": "VPN Disconnected",
+  "message": "Your VPN connection was dropped. Reconnect to access corporate resources.",
+  "timeout": 60,
+  "timeoutValue": "dismiss",
+  "title": "NVIDIA IT",
+  "accentColor": "#76B900",
+  "priority": 7,
+  "dnd": "ignore",
+  "buttons": [
+    { "label": "Reconnect VPN", "value": "reconnect", "style": "primary" },
+    { "label": "Open IT Wiki", "value": "wiki", "style": "secondary" },
+    { "label": "Dismiss", "value": "dismiss", "style": "secondary" }
+  ],
+  "resultActions": {
+    "reconnect": "url:https://github.com/TsekNet/hermes",
+    "wiki": "url:https://github.com/TsekNet/hermes#readme"
+  }
+}

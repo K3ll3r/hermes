@@ -1,0 +1,45 @@
+{
+  "heading": "Restart Required",
+  "message": "Your computer needs to restart to apply security updates.",
+  "id": "escalation-demo",
+  "timeout": 30,
+  "timeoutValue": "defer_1m",
+  "deferDeadline": "10m",
+  "maxDefers": 5,
+  "priority": 8,
+  "accentColor": "#76B900",
+  "title": "NVIDIA IT",
+  "helpUrl": "https://github.com/TsekNet/hermes",
+  "buttons": [
+    {
+      "label": "Restart Now",
+      "value": "restart",
+      "style": "primary"
+    },
+    {
+      "label": "Defer",
+      "style": "secondary",
+      "dropdown": [
+        { "label": "1 Minute", "value": "defer_1m" },
+        { "label": "2 Minutes", "value": "defer_2m" }
+      ]
+    }
+  ],
+  "escalation": [
+    {
+      "afterDefers": 2,
+      "timeout": 20,
+      "accentColor": "#FF6600",
+      "messageSuffix": "\n\nThis action is required soon. Deferrals are limited."
+    },
+    {
+      "afterDefers": 4,
+      "timeout": 10,
+      "accentColor": "#FF0000",
+      "messageSuffix": "\n\nFINAL NOTICE: Action required immediately."
+    }
+  ],
+  "resultActions": {
+    "restart": "url:https://github.com/TsekNet/hermes"
+  }
+}

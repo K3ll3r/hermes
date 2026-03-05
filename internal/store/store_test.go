@@ -225,6 +225,160 @@ func TestSaveHistory_Isolation(t *testing.T) {
 	}
 }
 
+func TestEnqueue_And_LoadQueue(t *testing.T) {
+	t.Parallel()
+	s := tempStore(t)
+
+	now := time.Now()
+	records := []*QueueRecord{
+		{ID: "q-low", Config: &config.NotificationConfig{Heading: "Low"}, QueuedAt: now, ExpiresAt: now.Add(24 * time.Hour), Priority: 3},
+		{ID: "q-high", Config: &config.NotificationConfig{Heading: "High"}, QueuedAt: now.Add(time.Second), ExpiresAt: now.Add(24 * time.Hour), Priority: 8},
+		{ID: "q-mid", Config: &config.NotificationConfig{Heading: "Mid"}, QueuedAt: now.Add(-time.Hour), ExpiresAt: now.Add(24 * time.Hour), Priority: 5},
+	}
+	for _, r := range records {
+		if err := s.Enqueue(r); err != nil {
+			t.Fatalf("Enqueue(%s): %v", r.ID, err)
+		}
+	}
+
+	got, err := s.LoadQueue()
+	if err != nil {
+		t.Fatalf("LoadQueue: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(got))
+	}
+	if got[0].ID != "q-high" {
+		t.Errorf("first = %q, want q-high (highest priority)", got[0].ID)
+	}
+	if got[1].ID != "q-mid" {
+		t.Errorf("second = %q, want q-mid", got[1].ID)
+	}
+	if got[2].ID != "q-low" {
+		t.Errorf("third = %q, want q-low", got[2].ID)
+	}
+}
+
+func TestEnqueue_Dedup(t *testing.T) {
+	t.Parallel()
+	s := tempStore(t)
+
+	now := time.Now()
+	r := &QueueRecord{
+		ID: "dup-1", Config: &config.NotificationConfig{Heading: "A"},
+		QueuedAt: now, ExpiresAt: now.Add(time.Hour), Priority: 5,
+	}
+	if err := s.Enqueue(r); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	r2 := &QueueRecord{
+		ID: "dup-1", Config: &config.NotificationConfig{Heading: "B"},
+		QueuedAt: now, ExpiresAt: now.Add(time.Hour), Priority: 9,
+	}
+	if err := s.Enqueue(r2); err != nil {
+		t.Fatalf("Enqueue dup: %v", err)
+	}
+
+	got, _ := s.LoadQueue()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 record (dedup), got %d", len(got))
+	}
+	if got[0].Config.Heading != "A" {
+		t.Errorf("heading = %q, want A (first write wins)", got[0].Config.Heading)
+	}
+}
+
+func TestDeleteQueued(t *testing.T) {
+	t.Parallel()
+	s := tempStore(t)
+
+	now := time.Now()
+	s.Enqueue(&QueueRecord{
+		ID: "del-q", Config: &config.NotificationConfig{Heading: "X"},
+		QueuedAt: now, ExpiresAt: now.Add(time.Hour), Priority: 5,
+	})
+	if err := s.DeleteQueued("del-q"); err != nil {
+		t.Fatalf("DeleteQueued: %v", err)
+	}
+	got, _ := s.LoadQueue()
+	if len(got) != 0 {
+		t.Fatalf("expected 0 after delete, got %d", len(got))
+	}
+}
+
+func TestEnqueueOffline(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "offline.db")
+
+	cfg := &config.NotificationConfig{
+		Heading: "Offline", Message: "test", ID: "off-1", Priority: 7,
+	}
+	if err := EnqueueOffline(path, cfg, 24*time.Hour); err != nil {
+		t.Fatalf("EnqueueOffline: %v", err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer s.Close()
+
+	got, _ := s.LoadQueue()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 queued record, got %d", len(got))
+	}
+	if got[0].ID != "off-1" {
+		t.Errorf("ID = %q, want off-1", got[0].ID)
+	}
+	if got[0].Priority != 7 {
+		t.Errorf("priority = %d, want 7", got[0].Priority)
+	}
+	if got[0].Config.Heading != "Offline" {
+		t.Errorf("heading = %q, want Offline", got[0].Config.Heading)
+	}
+}
+
+func TestEnqueueOffline_DefaultPriority(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "offline-default.db")
+
+	cfg := &config.NotificationConfig{Heading: "Default", Message: "prio"}
+	if err := EnqueueOffline(path, cfg, 24*time.Hour); err != nil {
+		t.Fatalf("EnqueueOffline: %v", err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer s.Close()
+
+	got, _ := s.LoadQueue()
+	if len(got) != 1 {
+		t.Fatalf("expected 1, got %d", len(got))
+	}
+	if got[0].Priority != 5 {
+		t.Errorf("default priority = %d, want 5", got[0].Priority)
+	}
+}
+
+func TestLoadQueue_SamePriority_OldestFirst(t *testing.T) {
+	t.Parallel()
+	s := tempStore(t)
+
+	now := time.Now()
+	s.Enqueue(&QueueRecord{ID: "newer", Config: &config.NotificationConfig{Heading: "B"}, QueuedAt: now.Add(time.Hour), ExpiresAt: now.Add(48 * time.Hour), Priority: 5})
+	s.Enqueue(&QueueRecord{ID: "older", Config: &config.NotificationConfig{Heading: "A"}, QueuedAt: now, ExpiresAt: now.Add(48 * time.Hour), Priority: 5})
+
+	got, _ := s.LoadQueue()
+	if len(got) != 2 {
+		t.Fatalf("expected 2, got %d", len(got))
+	}
+	if got[0].ID != "older" {
+		t.Errorf("first = %q, want older (FIFO within same priority)", got[0].ID)
+	}
+}
+
 func TestReopenPersists(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "persist.db")

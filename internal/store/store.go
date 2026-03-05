@@ -3,6 +3,8 @@
 package store
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -18,6 +20,7 @@ import (
 var (
 	bucketName  = []byte("notifications")
 	historyName = []byte("history")
+	queueName   = []byte("queue")
 )
 
 // Record is the on-disk representation of a notification.
@@ -52,7 +55,10 @@ func Open(path string) (*Store, error) {
 		if _, err := tx.CreateBucketIfNotExists(bucketName); err != nil {
 			return err
 		}
-		_, err := tx.CreateBucketIfNotExists(historyName)
+		if _, err := tx.CreateBucketIfNotExists(historyName); err != nil {
+			return err
+		}
+		_, err := tx.CreateBucketIfNotExists(queueName)
 		return err
 	}); err != nil {
 		db.Close()
@@ -185,6 +191,110 @@ func (s *Store) PruneHistory(maxAge time.Duration, maxCount int) error {
 		}
 		return nil
 	})
+}
+
+// DefaultQueueTTL is how long a queued notification remains valid before
+// expiring. Notifications older than this are discarded on drain.
+const DefaultQueueTTL = 30 * 24 * time.Hour
+
+// QueueRecord is a notification that was submitted while the service
+// was offline. It sits in the queue bucket until the next hermes serve
+// startup, at which point notifications are drained one at a time.
+type QueueRecord struct {
+	ID        string                     `json:"id"`
+	Config    *config.NotificationConfig `json:"config"`
+	QueuedAt  time.Time                  `json:"queuedAt"`
+	ExpiresAt time.Time                  `json:"expiresAt"`
+	Priority  int                        `json:"priority"`
+}
+
+// Enqueue adds a notification to the offline queue.
+func (s *Store) Enqueue(r *QueueRecord) error {
+	data, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(queueName)
+		existing := b.Get([]byte(r.ID))
+		if existing != nil {
+			return nil // dedup: already queued
+		}
+		return b.Put([]byte(r.ID), data)
+	})
+}
+
+// LoadQueue returns all queued records sorted by priority (highest first),
+// then by queue time (oldest first within the same priority).
+func (s *Store) LoadQueue() ([]*QueueRecord, error) {
+	var records []*QueueRecord
+	err := s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(queueName)
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(k, v []byte) error {
+			var r QueueRecord
+			if err := json.Unmarshal(v, &r); err != nil {
+				fmt.Fprintf(os.Stderr, "store: skip corrupt queue key %q: %v\n", k, err)
+				return nil
+			}
+			records = append(records, &r)
+			return nil
+		})
+	})
+	// Higher priority first, then oldest within same priority.
+	sort.Slice(records, func(i, j int) bool {
+		if records[i].Priority != records[j].Priority {
+			return records[i].Priority > records[j].Priority
+		}
+		return records[i].QueuedAt.Before(records[j].QueuedAt)
+	})
+	return records, err
+}
+
+// DeleteQueued removes a record from the offline queue.
+func (s *Store) DeleteQueued(id string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(queueName).Delete([]byte(id))
+	})
+}
+
+// EnqueueOffline opens the database, writes a queue record, and closes it.
+// Intended for use by hermes notify when the service daemon is not running.
+// If the daemon holds the DB lock, this returns an error (bbolt timeout).
+func EnqueueOffline(dbPath string, cfg *config.NotificationConfig, ttl time.Duration) error {
+	s, err := Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+
+	id := cfg.ID
+	if id == "" {
+		id = generateQueueID()
+	}
+
+	now := time.Now()
+	priority := cfg.Priority
+	if priority == 0 {
+		priority = 5
+	}
+	return s.Enqueue(&QueueRecord{
+		ID:        id,
+		Config:    cfg,
+		QueuedAt:  now,
+		ExpiresAt: now.Add(ttl),
+		Priority:  priority,
+	})
+}
+
+func generateQueueID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("q-%d", time.Now().UnixNano())
+	}
+	return "q-" + hex.EncodeToString(b)
 }
 
 // defaultPath returns the platform-appropriate database path.
