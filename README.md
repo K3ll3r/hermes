@@ -31,13 +31,20 @@
 
 ### Examples
 
-**Notification**
-
-<img src="assets/examples/notification.png" alt="Notification example" width="500"/>
+| | |
+|---|---|
+| **Simple** | **Restart** |
+| <img src="assets/examples/simple-notification.png" alt="Simple notification" width="380"/> | <img src="assets/examples/restart-notification.png" alt="Restart notification" width="380"/> |
+| **Update** | **Defer with dropdown** |
+| <img src="assets/examples/update-notification.png" alt="Update notification" width="380"/> | <img src="assets/examples/defer-with-dropdown.png" alt="Defer with dropdown" width="380"/> |
+| **Short defer (restart)** | **Short defer (deadline)** |
+| <img src="assets/examples/short-defer-restart.png" alt="Short defer restart" width="380"/> | <img src="assets/examples/short-defer-deadline.png" alt="Short defer deadline" width="380"/> |
+| **Image carousel** | **Install with watch** |
+| <img src="assets/examples/image-carousel.png" alt="Image carousel" width="380"/> | <img src="assets/examples/install-with-watch.png" alt="Install with watch" width="380"/> |
 
 **Notification History (inbox)**
 
-<img src="assets/examples/inbox.png" alt="Inbox with scrollbar" width="500"/>
+<img src="assets/examples/inbox.png" alt="Notification history with scrollbar" width="460"/>
 
 </div>
 
