@@ -13,7 +13,6 @@ import (
 )
 
 func TestGenerateAndLoadToken(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	orig := TokenPath
 	TokenPath = func() string { return filepath.Join(dir, "session.token") }
@@ -45,7 +44,6 @@ func TestGenerateAndLoadToken(t *testing.T) {
 }
 
 func TestRemoveToken(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	orig := TokenPath
 	TokenPath = func() string { return filepath.Join(dir, "session.token") }
@@ -60,7 +58,6 @@ func TestRemoveToken(t *testing.T) {
 }
 
 func TestLoadToken_Missing(t *testing.T) {
-	t.Parallel()
 	orig := TokenPath
 	TokenPath = func() string { return filepath.Join(t.TempDir(), "nonexistent") }
 	t.Cleanup(func() { TokenPath = orig })
