@@ -2,11 +2,11 @@
   "heading": "System Restart Required",
   "message": "Your computer needs to restart to apply security updates. Please save your work and close all applications.",
   "title": "IT Department",
-  "accentColor": "#D4A843",
+  "accent_color": "#D4A843",
   "timeout": 300,
-  "timeoutValue": "restart",
-  "escValue": "defer_1h",
-  "helpUrl": "https://example.com/help/restart",
+  "timeout_value": "restart",
+  "esc_value": "defer_1h",
+  "help_url": "https://example.com/help/restart",
   "buttons": [
     {
       "label": "Defer",

@@ -145,11 +145,11 @@ $hero_config = @{
     heading      = 'Hermes'
     message      = "A cross-platform notification framework for IT teams.`n`nPowered by Go and Wails v2, Hermes displays rich notifications in a native webview with support for buttons, deferrals, image carousels, and more."
     title        = 'IT Department'
-    accentColor  = '#D4A843'
+    accent_color  = '#D4A843'
     timeout      = 300
-    timeoutValue = 'defer_1h'
-    escValue     = 'defer_1h'
-    helpUrl      = 'https://github.com/TsekNet/hermes'
+    timeout_value = 'defer_1h'
+    esc_value     = 'defer_1h'
+    help_url      = 'https://github.com/TsekNet/hermes'
     buttons      = @(
         @{ label = 'Defer'; style = 'secondary'; dropdown = @(
             @{ label = '1 Hour';  value = 'defer_1h' },
@@ -189,14 +189,14 @@ $daemon = Start-Process -FilePath $HermesExe -ArgumentList 'serve' -PassThru -Wi
 Start-Sleep -Seconds 3
 
 $inboxConfigs = @(
-    @{ heading='System Restart Required';    message='Your computer needs to restart to apply security updates.';           title='IT Department';       accentColor='#D4A843'; timeout=3; timeoutValue='restart';    buttons=@(@{label='Restart Now';    value='restart';    style='primary'}) },
-    @{ heading='VPN Disconnecting';          message='Your VPN session will be disconnected for network maintenance.';      title='Network Ops';         accentColor='#D4A843'; timeout=3; timeoutValue='disconnect'; buttons=@(@{label='Disconnect Now'; value='disconnect'; style='danger'})  },
-    @{ heading='Critical Security Patch';    message='A zero-day vulnerability has been patched. Immediate restart required.'; title='Security Ops';     accentColor='#FF0000'; timeout=3; timeoutValue='restart';    buttons=@(@{label='Restart Now';    value='restart';    style='danger'})  },
-    @{ heading='Software Update Available';  message='A new version of the corporate VPN is ready to install.';             title='IT Department';       accentColor='#D4A843'; timeout=3; timeoutValue='install';    buttons=@(@{label='Install Now';    value='install';    style='primary'}) },
-    @{ heading='End User License Agreement'; message='Please review and accept the updated EULA.';                          title='IT Department';       accentColor='#76B900'; timeout=3; timeoutValue='accepted';   buttons=@(@{label='Accept';         value='accepted';   style='primary'}) },
-    @{ heading='Maintenance Window';         message='Scheduled maintenance begins in 30 minutes.';                         title='IT Department';       accentColor='#D4A843'; timeout=3; timeoutValue='dismiss';    buttons=@(@{label='Got it';         value='dismiss';    style='primary'}) },
-    @{ heading='Security Agent Install';     message='Click Install to begin.';                                             title='Platform Eng';        accentColor='#D4A843'; timeout=3; timeoutValue='timeout';    buttons=@(@{label='Install';        value='install';    style='primary'}) },
-    @{ heading='VPN Disconnected';           message='Your VPN connection was dropped. Reconnect to access corporate resources.'; title='IT Department';  accentColor='#76B900'; timeout=3; timeoutValue='dismiss';    buttons=@(@{label='Reconnect VPN';  value='reconnect';  style='primary'}) }
+    @{ heading='System Restart Required';    message='Your computer needs to restart to apply security updates.';           title='IT Department';       accent_color='#D4A843'; timeout=3; timeout_value='restart';    buttons=@(@{label='Restart Now';    value='restart';    style='primary'}) },
+    @{ heading='VPN Disconnecting';          message='Your VPN session will be disconnected for network maintenance.';      title='Network Ops';         accent_color='#D4A843'; timeout=3; timeout_value='disconnect'; buttons=@(@{label='Disconnect Now'; value='disconnect'; style='danger'})  },
+    @{ heading='Critical Security Patch';    message='A zero-day vulnerability has been patched. Immediate restart required.'; title='Security Ops';     accent_color='#FF0000'; timeout=3; timeout_value='restart';    buttons=@(@{label='Restart Now';    value='restart';    style='danger'})  },
+    @{ heading='Software Update Available';  message='A new version of the corporate VPN is ready to install.';             title='IT Department';       accent_color='#D4A843'; timeout=3; timeout_value='install';    buttons=@(@{label='Install Now';    value='install';    style='primary'}) },
+    @{ heading='End User License Agreement'; message='Please review and accept the updated EULA.';                          title='IT Department';       accent_color='#76B900'; timeout=3; timeout_value='accepted';   buttons=@(@{label='Accept';         value='accepted';   style='primary'}) },
+    @{ heading='Maintenance Window';         message='Scheduled maintenance begins in 30 minutes.';                         title='IT Department';       accent_color='#D4A843'; timeout=3; timeout_value='dismiss';    buttons=@(@{label='Got it';         value='dismiss';    style='primary'}) },
+    @{ heading='Security Agent Install';     message='Click Install to begin.';                                             title='Platform Eng';        accent_color='#D4A843'; timeout=3; timeout_value='timeout';    buttons=@(@{label='Install';        value='install';    style='primary'}) },
+    @{ heading='VPN Disconnected';           message='Your VPN connection was dropped. Reconnect to access corporate resources.'; title='IT Department';  accent_color='#76B900'; timeout=3; timeout_value='dismiss';    buttons=@(@{label='Reconnect VPN';  value='reconnect';  style='primary'}) }
 )
 
 $tmpDir = Join-Path $env:TEMP 'hermes-inbox'

@@ -106,16 +106,16 @@
     heading.textContent = entry.heading;
     top.appendChild(heading);
 
-    var actionable = entry.responseValue && entry.responseValue !== "dismiss"
-        && entry.responseValue !== "cancelled" && entry.responseValue.indexOf("timeout") !== 0;
+    var actionable = entry.response_value && entry.response_value !== "dismiss"
+        && entry.response_value !== "cancelled" && entry.response_value.indexOf("timeout") !== 0;
 
     var badge = document.createElement(actionable ? "button" : "span");
     badge.className = "inbox-card-badge";
-    var label = entry.responseValue.replace(/_/g, " ");
+    var label = (entry.response_value || "").replace(/_/g, " ");
     badge.textContent = label.charAt(0).toUpperCase() + label.slice(1);
-    if (entry.responseValue === "dismiss" || entry.responseValue === "cancelled") {
+    if (entry.response_value === "dismiss" || entry.response_value === "cancelled") {
       badge.classList.add("badge-muted");
-    } else if (entry.responseValue.indexOf("timeout") === 0) {
+    } else if (entry.response_value.indexOf("timeout") === 0) {
       badge.classList.add("badge-warn");
     } else {
       badge.classList.add("badge-ok");
@@ -123,7 +123,7 @@
     }
     if (actionable) {
       badge.setAttribute("data-id", entry.id);
-      badge.setAttribute("data-value", entry.responseValue);
+      badge.setAttribute("data-value", entry.response_value);
       badge.addEventListener("click", function(e) {
         var b = e.target;
         var id = b.getAttribute("data-id");
@@ -151,8 +151,8 @@
     meta.className = "inbox-card-meta";
     var parts = [];
     if (entry.source) parts.push(entry.source);
-    if (entry.completedAt) {
-      var d = new Date(entry.completedAt);
+    if (entry.completed_at) {
+      var d = new Date(entry.completed_at);
       parts.push(d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}));
     }
     meta.textContent = parts.join("  \u00B7  ");
@@ -164,18 +164,18 @@
   function configure(cfg) {
     if (!cfg) return;
 
-    if (cfg.accentColor && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(cfg.accentColor)) {
-      document.documentElement.style.setProperty("--accent", cfg.accentColor);
-      document.documentElement.style.setProperty("--btn-primary-bg", cfg.accentColor);
+    if (cfg.accent_color && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(cfg.accent_color)) {
+      document.documentElement.style.setProperty("--accent", cfg.accent_color);
+      document.documentElement.style.setProperty("--btn-primary-bg", cfg.accent_color);
     }
 
     document.getElementById("title").textContent = cfg.title || "";
     document.getElementById("heading").textContent = cfg.heading || "";
     document.getElementById("message").textContent = cfg.message || "";
 
-    if (cfg.helpUrl && /^https?:\/\//i.test(cfg.helpUrl)) {
+    if (cfg.help_url && /^https?:\/\//i.test(cfg.help_url)) {
       var link = document.getElementById("help-link");
-      link.href = cfg.helpUrl;
+      link.href = cfg.help_url;
       link.style.display = "inline";
       link.addEventListener("click", function(e) {
         e.preventDefault();
@@ -187,13 +187,13 @@
       buildCarousel(cfg.images);
     }
 
-    if (cfg.watchPaths && cfg.watchPaths.length > 0) {
+    if (cfg.watch_paths && cfg.watch_paths.length > 0) {
       initWatchStatus();
     }
 
     remaining = cfg.timeout || 300;
-    timeoutValue = cfg.timeoutValue || "";
-    escValue = cfg.escValue || timeoutValue;
+    timeoutValue = cfg.timeout_value || "";
+    escValue = cfg.esc_value || timeoutValue;
 
     buildButtons(cfg.buttons || []);
     startCountdown();

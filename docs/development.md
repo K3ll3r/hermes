@@ -114,7 +114,7 @@ $config = @'
   "heading": "System Restart Required",
   "message": "Your computer needs to restart.",
   "timeout": 300,
-  "timeoutValue": "restart",
+  "timeout_value": "restart",
   "buttons": [
     {"label": "Defer 1h", "value": "defer_1h", "style": "secondary"},
     {"label": "Restart Now", "value": "restart", "style": "primary"}
@@ -240,9 +240,9 @@ hermes serve &
 hermes notify '{
   "heading": "Restart Required",
   "message": "Restart to apply updates.",
-  "deferDeadline": "5m",
-  "maxDefers": 2,
-  "timeoutValue": "restart",
+  "defer_deadline": "5m",
+  "max_defers": 2,
+  "timeout_value": "restart",
   "buttons": [
     {"label": "Defer 1m", "value": "defer_1m", "style": "secondary"},
     {"label": "Restart", "value": "restart", "style": "primary"}
@@ -253,14 +253,14 @@ hermes notify '{
 watch hermes list
 ```
 
-After 2 defers or 5 minutes (whichever comes first), the notification auto-actions with `timeoutValue`.
+After 2 defers or 5 minutes (whichever comes first), the notification auto-actions with `timeout_value`.
 
 ### Testing persistence across restarts
 
 ```bash
 # 1. Start service, send a deferrable notification, defer it
 hermes serve &
-hermes notify '{"heading":"Persist Test","message":"Defer me.","deferDeadline":"1h","buttons":[{"label":"Defer 5m","value":"defer_5m","style":"secondary"},{"label":"OK","value":"ok","style":"primary"}]}' &
+hermes notify '{"heading":"Persist Test","message":"Defer me.","defer_deadline":"1h","buttons":[{"label":"Defer 5m","value":"defer_5m","style":"secondary"},{"label":"OK","value":"ok","style":"primary"}]}' &
 # Click "Defer 5m" in the UI
 
 # 2. Kill the service
@@ -326,10 +326,10 @@ The frontend lives in `frontend/` — plain HTML/CSS/JS, no build step:
 | `style.css` | Dark theme, CSS custom properties (`--accent`) |
 | `main.js` | Countdown timer, button handling, Wails bindings |
 
-The accent color is set dynamically from the JSON config's `accentColor` field. To preview different themes:
+The accent color is set dynamically from the JSON config's `accent_color` field. To preview different themes:
 
 ```bash
-hermes --local '{"heading":"Blue","message":"Test","accentColor":"#0078D4"}'
-hermes --local '{"heading":"Red","message":"Test","accentColor":"#E74C3C"}'
-hermes --local '{"heading":"Green","message":"Test","accentColor":"#27AE60"}'
+hermes --local '{"heading":"Blue","message":"Test","accent_color":"#0078D4"}'
+hermes --local '{"heading":"Red","message":"Test","accent_color":"#E74C3C"}'
+hermes --local '{"heading":"Green","message":"Test","accent_color":"#27AE60"}'
 ```

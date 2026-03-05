@@ -28,8 +28,8 @@ type Record struct {
 	ID         string                       `json:"id"`
 	Config     *config.NotificationConfig   `json:"config"`
 	State      string                       `json:"state"`
-	DeferCount int                          `json:"deferCount"`
-	CreatedAt  time.Time                    `json:"createdAt"`
+	DeferCount int                          `json:"defer_count"`
+	CreatedAt  time.Time                    `json:"created_at"`
 	Deadline   time.Time                    `json:"deadline,omitempty"`
 }
 
@@ -129,9 +129,9 @@ func (s *Store) LoadAll() ([]*Record, error) {
 type HistoryRecord struct {
 	ID            string                     `json:"id"`
 	Config        *config.NotificationConfig `json:"config"`
-	ResponseValue string                     `json:"responseValue"`
-	CreatedAt     time.Time                  `json:"createdAt"`
-	CompletedAt   time.Time                  `json:"completedAt"`
+	ResponseValue string                     `json:"response_value"`
+	CreatedAt     time.Time                  `json:"created_at"`
+	CompletedAt   time.Time                  `json:"completed_at"`
 }
 
 // SaveHistory persists a completed notification to the history bucket.
@@ -203,8 +203,8 @@ const DefaultQueueTTL = 30 * 24 * time.Hour
 type QueueRecord struct {
 	ID        string                     `json:"id"`
 	Config    *config.NotificationConfig `json:"config"`
-	QueuedAt  time.Time                  `json:"queuedAt"`
-	ExpiresAt time.Time                  `json:"expiresAt"`
+	QueuedAt  time.Time                  `json:"queued_at"`
+	ExpiresAt time.Time                  `json:"expires_at"`
 	Priority  int                        `json:"priority"`
 }
 

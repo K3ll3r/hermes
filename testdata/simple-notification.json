@@ -2,9 +2,9 @@
   "heading": "Maintenance Window",
   "message": "Scheduled maintenance begins in 30 minutes. Please save your work.",
   "title": "IT Department",
-  "accentColor": "#D4A843",
+  "accent_color": "#D4A843",
   "timeout": 60,
-  "timeoutValue": "dismiss",
+  "timeout_value": "dismiss",
   "buttons": [
     {"label": "Got it", "value": "dismiss", "style": "primary"}
   ]

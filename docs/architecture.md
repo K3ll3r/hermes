@@ -38,14 +38,14 @@ sequenceDiagram
 ## Notification lifecycle
 
 1. **Submit** — CLI sends config via `Notify` RPC. Manager generates an ID, stores the notification, and blocks the RPC.
-2. **Dependency check** — If `dependsOn` is set, the notification enters `waiting_on_dependency` state until the dependency completes.
-3. **Quiet hours check** — If `quietHours` is configured and the current time falls within the window, the manager sleeps until the window ends. Deadlines are still enforced while waiting.
+2. **Dependency check** — If `depends_on` is set, the notification enters `waiting_on_dependency` state until the dependency completes.
+3. **Quiet hours check** — If `quiet_hours` is configured and the current time falls within the window, the manager sleeps until the window ends. Deadlines are still enforced while waiting.
 4. **DND check** — Before launching the UI, the manager checks OS Do Not Disturb status. With `dnd=respect` (default), it polls every 60s until DND clears. With `dnd=ignore`, it proceeds immediately. With `dnd=skip`, it completes with `"dnd_active"`.
 5. **Launch** — Service launches a UI subprocess directly (same user session).
 6. **Response** — User clicks a button. UI reports choice via `ReportChoice` RPC. `Notify` RPC unblocks and returns the value.
 7. **Defer + Escalation** — User defers. Manager increments defer count, starts an internal timer, and re-launches the UI when the timer fires. If `escalation` thresholds are configured, the notification's appearance and timeout mutate progressively (shorter timeout, warning color, urgency text).
-8. **Action chaining** — When the notification completes, the manager checks `resultActions` for a mapping from the user's response value to an automatic action (`cmd:` or `url:` prefix). The action is dispatched server-side.
-9. **Deadline** — If `deferDeadline` is set and the deadline passes, the notification auto-actions with `timeoutValue`. Deadlines are enforced even while waiting for DND or quiet hours to clear.
+8. **Action chaining** — When the notification completes, the manager checks `result_actions` for a mapping from the user's response value to an automatic action (`cmd:` or `url:` prefix). The action is dispatched server-side.
+9. **Deadline** — If `defer_deadline` is set and the deadline passes, the notification auto-actions with `timeout_value`. Deadlines are enforced even while waiting for DND or quiet hours to clear.
 10. **Cancel** — External `Cancel` RPC removes the notification and unblocks the `Notify` RPC.
 
 ---
@@ -59,14 +59,14 @@ sequenceDiagram
 
 ### Escalation ladder
 
-The `escalation` array defines progressive urgency steps that mutate the notification each time the user defers past a threshold. The highest matching step (by `afterDefers`) wins.
+The `escalation` array defines progressive urgency steps that mutate the notification each time the user defers past a threshold. The highest matching step (by `after_defers`) wins.
 
 | Field | Effect |
 |-------|--------|
-| `afterDefers` | Minimum defer count to activate this step |
+| `after_defers` | Minimum defer count to activate this step |
 | `timeout` | Override `TimeoutSeconds` (shorter = more urgent) |
-| `accentColor` | Override accent color (e.g. orange then red) |
-| `messageSuffix` | Appended to the message body (urgency warning text) |
+| `accent_color` | Override accent color (e.g. orange then red) |
+| `message_suffix` | Appended to the message body (urgency warning text) |
 
 Escalation is applied in the manager before each re-show, so the user sees progressively more urgent versions of the same notification. See `testdata/escalation-restart.json` for a working example.
 
@@ -74,11 +74,11 @@ Escalation is applied in the manager before each re-show, so the user sees progr
 
 ## Action chaining
 
-The `resultActions` map connects user responses to automatic follow-up actions. When a notification completes with a value that matches a key in `resultActions`, the manager dispatches the corresponding action server-side.
+The `result_actions` map connects user responses to automatic follow-up actions. When a notification completes with a value that matches a key in `result_actions`, the manager dispatches the corresponding action server-side.
 
 ```json
 {
-  "resultActions": {
+  "result_actions": {
     "restart": "cmd:shutdown /r /t 60",
     "wiki": "url:https://wiki.example.com/vpn-troubleshooting"
   }
@@ -87,17 +87,17 @@ The `resultActions` map connects user responses to automatic follow-up actions. 
 
 Supported action prefixes: `cmd:` (shell command), `url:` (opens in default browser / system handler). The action runs in the service daemon process, not the UI subprocess.
 
-> **Security note:** `cmd:` actions execute with the same privileges as the `hermes serve` process (the logged-in user). Only trusted configs should define `resultActions`. Configs are validated on enqueue and drain, but the shell command itself is passed to `sh -c` / `cmd /C` without further sandboxing.
+> **Security note:** `cmd:` actions execute with the same privileges as the `hermes serve` process (the logged-in user). Only trusted configs should define `result_actions`. Configs are validated on enqueue and drain, but the shell command itself is passed to `sh -c` / `cmd /C` without further sandboxing.
 
 ---
 
 ## Quiet hours
 
-The `quietHours` object defines a daily window during which notifications are delayed (like DND, but time-based). The manager sleeps until the quiet window ends, then proceeds with the normal DND check.
+The `quiet_hours` object defines a daily window during which notifications are delayed (like DND, but time-based). The manager sleeps until the quiet window ends, then proceeds with the normal DND check.
 
 ```json
 {
-  "quietHours": {
+  "quiet_hours": {
     "start": "22:00",
     "end": "07:00",
     "timezone": "America/Los_Angeles"
@@ -113,14 +113,14 @@ The `quietHours` object defines a daily window during which notifications are de
 
 ## Localization
 
-Notifications support localized heading and message text via `headingLocalized` and `messageLocalized` maps. Keys are BCP-47-style language codes (e.g. `"ja"`, `"de"`, `"es"`).
+Notifications support localized heading and message text via `heading_localized` and `message_localized` maps. Keys are BCP-47-style language codes (e.g. `"ja"`, `"de"`, `"es"`).
 
 ```json
 {
   "heading": "Restart Required",
-  "headingLocalized": { "ja": "再起動が必要です", "de": "Neustart erforderlich" },
+  "heading_localized": { "ja": "再起動が必要です", "de": "Neustart erforderlich" },
   "message": "Please restart to apply updates.",
-  "messageLocalized": { "ja": "アップデートを適用するため再起動してください。" }
+  "message_localized": { "ja": "アップデートを適用するため再起動してください。" }
 }
 ```
 
@@ -136,12 +136,12 @@ Matching tries exact code, then prefix (`"ja"` matches `"ja-JP"` key), then reve
 
 ## Notification dependencies
 
-The `dependsOn` field creates a sequential workflow: notification B is held in a `waiting_on_dependency` state until notification A (identified by `dependsOn` ID) completes.
+The `depends_on` field creates a sequential workflow: notification B is held in a `waiting_on_dependency` state until notification A (identified by `depends_on` ID) completes.
 
 ```json
 [
   { "id": "accept-eula", "heading": "Accept EULA", ... },
-  { "id": "apply-update", "dependsOn": "accept-eula", "heading": "Install Update", ... }
+  { "id": "apply-update", "depends_on": "accept-eula", "heading": "Install Update", ... }
 ]
 ```
 
@@ -360,7 +360,7 @@ The algorithm uses `WindowCenter()` as a reference point, then derives the notif
 
 ## Web UI
 
-The frontend is vanilla HTML/CSS/JS — no framework, no bundler, no node_modules. CSS uses custom properties (`--accent`) set at runtime from `accentColor` in the config.
+The frontend is vanilla HTML/CSS/JS — no framework, no bundler, no node_modules. CSS uses custom properties (`--accent`) set at runtime from `accent_color` in the config.
 
 JS communicates with Go through Wails runtime bindings:
 

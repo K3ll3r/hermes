@@ -19,11 +19,11 @@ type NotificationConfig struct {
 	Message        string   `json:"message"`
 	Buttons        []Button `json:"buttons"`
 	TimeoutSeconds int      `json:"timeout"`
-	TimeoutValue   string   `json:"timeoutValue"`
-	EscValue       string   `json:"escValue"`
+	TimeoutValue   string   `json:"timeout_value"`
+	EscValue       string   `json:"esc_value"`
 	Title          string   `json:"title"`
-	AccentColor    string   `json:"accentColor"`
-	HelpURL        string   `json:"helpUrl"`
+	AccentColor    string   `json:"accent_color"`
+	HelpURL        string   `json:"help_url"`
 	Platform       string   `json:"platform"`
 	// ID uniquely identifies this notification for the service daemon.
 	// Auto-generated if empty when submitted via gRPC.
@@ -32,11 +32,11 @@ type NotificationConfig struct {
 	// DeferDeadline is the maximum duration (e.g. "24h", "7d") after the
 	// first notification within which the user may defer. After this
 	// deadline the notification auto-actions with TimeoutValue.
-	DeferDeadline string `json:"deferDeadline,omitempty"`
+	DeferDeadline string `json:"defer_deadline,omitempty"`
 
 	// MaxDefers is the maximum number of times the user may defer.
 	// 0 means unlimited (until deadline).
-	MaxDefers int `json:"maxDefers,omitempty"`
+	MaxDefers int `json:"max_defers,omitempty"`
 
 	// Images is an ordered list of image URLs or base64 data URIs to display
 	// in a carousel above the message. When present the window auto-sizes
@@ -47,7 +47,7 @@ type NotificationConfig struct {
 	// When a watched path is created, modified, or deleted, the frontend
 	// receives an event via the Wails binding. Useful for validating
 	// installations (e.g. watch for a receipt file to appear).
-	WatchPaths []string `json:"watchPaths,omitempty"`
+	WatchPaths []string `json:"watch_paths,omitempty"`
 
 	// DND controls behavior when the OS Do Not Disturb / Focus mode is active.
 	//   "respect" (default) — wait and retry every 60s until DND is off.
@@ -70,37 +70,37 @@ type NotificationConfig struct {
 	// Keys are button values (e.g. "restart"), values use the same prefix
 	// scheme as buttons: "cmd:shutdown /r /t 60", "url:https://...".
 	// The action is dispatched server-side after the notification completes.
-	ResultActions map[string]string `json:"resultActions,omitempty"`
+	ResultActions map[string]string `json:"result_actions,omitempty"`
 
 	// QuietHours suppresses notification delivery during specified hours.
 	// The manager delays delivery until the quiet window ends (like DND).
-	QuietHours *QuietHours `json:"quietHours,omitempty"`
+	QuietHours *QuietHours `json:"quiet_hours,omitempty"`
 
 	// HeadingLocalized maps BCP-47 language codes to localized heading text.
 	// At runtime, the resolved locale (--locale flag or OS detection)
 	// selects the best match. Falls back to Heading if no match.
-	HeadingLocalized map[string]string `json:"headingLocalized,omitempty"`
+	HeadingLocalized map[string]string `json:"heading_localized,omitempty"`
 
 	// MessageLocalized maps BCP-47 language codes to localized message text.
-	MessageLocalized map[string]string `json:"messageLocalized,omitempty"`
+	MessageLocalized map[string]string `json:"message_localized,omitempty"`
 
 	// DependsOn is the ID of a notification that must complete before this
 	// one is shown. The manager holds this notification in a waiting state
 	// until the dependency is satisfied.
-	DependsOn string `json:"dependsOn,omitempty"`
+	DependsOn string `json:"depends_on,omitempty"`
 }
 
 // EscalationStep defines a mutation applied to the notification after
 // a certain number of deferrals.
 type EscalationStep struct {
 	// AfterDefers is the minimum defer count that activates this step.
-	AfterDefers int `json:"afterDefers"`
+	AfterDefers int `json:"after_defers"`
 	// Timeout overrides TimeoutSeconds (shorter = more urgent).
 	Timeout int `json:"timeout,omitempty"`
 	// AccentColor overrides the notification's accent color.
-	AccentColor string `json:"accentColor,omitempty"`
+	AccentColor string `json:"accent_color,omitempty"`
 	// MessageSuffix is appended to the message (e.g. urgency warning).
-	MessageSuffix string `json:"messageSuffix,omitempty"`
+	MessageSuffix string `json:"message_suffix,omitempty"`
 }
 
 // QuietHours defines a daily window during which notifications are delayed.
@@ -373,11 +373,11 @@ func (c *NotificationConfig) Validate() error {
 		}
 	}
 	if len(c.WatchPaths) > 10 {
-		errs = append(errs, fmt.Sprintf("watchPaths: %d exceeds maximum of 10", len(c.WatchPaths)))
+		errs = append(errs, fmt.Sprintf("watch_paths: %d exceeds maximum of 10", len(c.WatchPaths)))
 	}
 	for i, p := range c.WatchPaths {
 		if strings.Contains(p, "..") {
-			errs = append(errs, fmt.Sprintf("watchPaths[%d]: path traversal (..) is not allowed", i))
+			errs = append(errs, fmt.Sprintf("watch_paths[%d]: path traversal (..) is not allowed", i))
 		}
 	}
 	if c.Priority < 0 || c.Priority > 10 {
@@ -385,37 +385,37 @@ func (c *NotificationConfig) Validate() error {
 	}
 	for i, step := range c.Escalation {
 		if step.AfterDefers < 1 {
-			errs = append(errs, fmt.Sprintf("escalation[%d]: afterDefers must be >= 1", i))
+			errs = append(errs, fmt.Sprintf("escalation[%d]: after_defers must be >= 1", i))
 		}
 	}
 	if q := c.QuietHours; q != nil {
 		if _, ok := parseTimeOfDay(q.Start); !ok {
-			errs = append(errs, `quietHours.start must be "HH:MM" format`)
+			errs = append(errs, `quiet_hours.start must be "HH:MM" format`)
 		}
 		if _, ok := parseTimeOfDay(q.End); !ok {
-			errs = append(errs, `quietHours.end must be "HH:MM" format`)
+			errs = append(errs, `quiet_hours.end must be "HH:MM" format`)
 		}
 		if q.Timezone != "" {
 			if _, err := time.LoadLocation(q.Timezone); err != nil {
-				errs = append(errs, fmt.Sprintf("quietHours.timezone: %v", err))
+				errs = append(errs, fmt.Sprintf("quiet_hours.timezone: %v", err))
 			}
 		}
 	}
 	if len(c.ResultActions) > 20 {
-		errs = append(errs, fmt.Sprintf("resultActions: %d entries exceeds maximum of 20", len(c.ResultActions)))
+		errs = append(errs, fmt.Sprintf("result_actions: %d entries exceeds maximum of 20", len(c.ResultActions)))
 	}
 	for k, v := range c.ResultActions {
 		if strings.ContainsAny(k, "\n\r") {
-			errs = append(errs, fmt.Sprintf("resultActions key %q: must not contain newlines", k))
+			errs = append(errs, fmt.Sprintf("result_actions key %q: must not contain newlines", k))
 		}
 		lower := strings.ToLower(v)
 		if !strings.HasPrefix(lower, "cmd:") && !strings.HasPrefix(lower, "url:") &&
 			!strings.HasPrefix(lower, "https:") && !strings.HasPrefix(lower, "http:") {
-			errs = append(errs, fmt.Sprintf("resultActions[%q]: value must start with cmd:, url:, https:, or http:", k))
+			errs = append(errs, fmt.Sprintf("result_actions[%q]: value must start with cmd:, url:, https:, or http:", k))
 		}
 	}
 	if c.DependsOn != "" && c.DependsOn == c.ID {
-		errs = append(errs, `"dependsOn" must not reference the notification's own ID`)
+		errs = append(errs, `"depends_on" must not reference the notification's own ID`)
 	}
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))

@@ -2,9 +2,9 @@
   "heading": "VPN Disconnected",
   "message": "Your VPN connection was dropped. Reconnect to access corporate resources.",
   "timeout": 60,
-  "timeoutValue": "dismiss",
+  "timeout_value": "dismiss",
   "title": "IT Department",
-  "accentColor": "#D4A843",
+  "accent_color": "#D4A843",
   "priority": 7,
   "dnd": "ignore",
   "buttons": [
@@ -12,7 +12,7 @@
     { "label": "Open IT Wiki", "value": "wiki", "style": "secondary" },
     { "label": "Dismiss", "value": "dismiss", "style": "secondary" }
   ],
-  "resultActions": {
+  "result_actions": {
     "reconnect": "url:https://github.com/TsekNet/hermes",
     "wiki": "url:https://github.com/TsekNet/hermes#readme"
   }

@@ -3,13 +3,13 @@
   "message": "Your computer needs to restart to apply security updates.",
   "id": "escalation-demo",
   "timeout": 30,
-  "timeoutValue": "defer_1m",
-  "deferDeadline": "10m",
-  "maxDefers": 5,
+  "timeout_value": "defer_1m",
+  "defer_deadline": "10m",
+  "max_defers": 5,
   "priority": 8,
-  "accentColor": "#D4A843",
+  "accent_color": "#D4A843",
   "title": "IT Department",
-  "helpUrl": "https://github.com/TsekNet/hermes",
+  "help_url": "https://github.com/TsekNet/hermes",
   "buttons": [
     {
       "label": "Restart Now",
@@ -27,19 +27,19 @@
   ],
   "escalation": [
     {
-      "afterDefers": 2,
+      "after_defers": 2,
       "timeout": 20,
-      "accentColor": "#FF6600",
-      "messageSuffix": "\n\nThis action is required soon. Deferrals are limited."
+      "accent_color": "#FF6600",
+      "message_suffix": "\n\nThis action is required soon. Deferrals are limited."
     },
     {
-      "afterDefers": 4,
+      "after_defers": 4,
       "timeout": 10,
-      "accentColor": "#FF0000",
-      "messageSuffix": "\n\nFINAL NOTICE: Action required immediately."
+      "accent_color": "#FF0000",
+      "message_suffix": "\n\nFINAL NOTICE: Action required immediately."
     }
   ],
-  "resultActions": {
+  "result_actions": {
     "restart": "url:https://github.com/TsekNet/hermes"
   }
 }

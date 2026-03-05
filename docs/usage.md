@@ -65,24 +65,24 @@ hermes accepts a single JSON object with these fields:
 | `message` | string | **yes** | | Body text below the heading |
 | `buttons` | array | no | `[]` | Button definitions (see below) |
 | `timeout` | int | no | `300` | Seconds until auto-action |
-| `timeoutValue` | string | no | `""` | Value returned on timeout |
-| `escValue` | string | no | `""` | Value returned on ESC (defaults to `timeoutValue`) |
+| `timeout_value` | string | no | `""` | Value returned on timeout |
+| `esc_value` | string | no | `""` | Value returned on ESC (defaults to `timeout_value`) |
 | `title` | string | no | `IT Department` | Small uppercase label at the top |
-| `accentColor` | string | no | `#D4A843` | Theme accent color (hex) |
-| `helpUrl` | string | no | `""` | "Need help?" link URL |
+| `accent_color` | string | no | `#D4A843` | Theme accent color (hex) |
+| `help_url` | string | no | `""` | "Need help?" link URL |
 | `id` | string | no | auto-generated | Unique notification ID for the service |
-| `deferDeadline` | string | no | `""` | Max deferral window (e.g., `"24h"`, `"7d"`) |
-| `maxDefers` | int | no | `0` | Max number of deferrals (0 = unlimited) |
+| `defer_deadline` | string | no | `""` | Max deferral window (e.g., `"24h"`, `"7d"`) |
+| `max_defers` | int | no | `0` | Max number of deferrals (0 = unlimited) |
 | `images` | array | no | `[]` | HTTPS URLs or `data:image/` URIs for a carousel (max 20, no SVG data URIs) |
-| `watchPaths` | array | no | `[]` | Filesystem paths to monitor for changes (max 10, no `..` traversal) |
+| `watch_paths` | array | no | `[]` | Filesystem paths to monitor for changes (max 10, no `..` traversal) |
 | `dnd` | string | no | `"respect"` | Do Not Disturb behavior: `"respect"`, `"ignore"`, or `"skip"` |
 | `priority` | int | no | `5` | Delivery priority (0-10). Higher = shown first in queue drain |
 | `escalation` | array | no | `[]` | Progressive urgency steps applied after repeated deferrals (see below) |
-| `resultActions` | object | no | `{}` | Maps response values to automatic actions (action chaining, see below) |
-| `quietHours` | object | no | `null` | Time-based delivery suppression (see below) |
-| `headingLocalized` | object | no | `{}` | Locale → heading text map for i18n |
-| `messageLocalized` | object | no | `{}` | Locale → message text map for i18n |
-| `dependsOn` | string | no | `""` | ID of notification that must complete first (sequential workflows) |
+| `result_actions` | object | no | `{}` | Maps response values to automatic actions (action chaining, see below) |
+| `quiet_hours` | object | no | `null` | Time-based delivery suppression (see below) |
+| `heading_localized` | object | no | `{}` | Locale → heading text map for i18n |
+| `message_localized` | object | no | `{}` | Locale → message text map for i18n |
+| `depends_on` | string | no | `""` | ID of notification that must complete first (sequential workflows) |
 
 ### Button format
 
@@ -149,9 +149,9 @@ When using the service daemon, configure deferrals to control how long and how m
   "heading": "System Restart Required",
   "message": "Your computer needs to restart to apply security updates.",
   "timeout": 300,
-  "timeoutValue": "restart",
-  "deferDeadline": "24h",
-  "maxDefers": 5,
+  "timeout_value": "restart",
+  "defer_deadline": "24h",
+  "max_defers": 5,
   "buttons": [
     {"label": "Defer 1h", "value": "defer_1h", "style": "secondary"},
     {"label": "Defer 4h", "value": "defer_4h", "style": "secondary"},
@@ -162,7 +162,7 @@ When using the service daemon, configure deferrals to control how long and how m
 
 Defer values must match the pattern `defer_Xh`, `defer_Xd`, `defer_Xm` or `defer_Xs` (hours, days, minutes, seconds). The service parses these to schedule re-notification. Deferral state is persisted to disk so notifications survive service restarts (see [Architecture — Persistence](architecture.md#persistence)).
 
-When `maxDefers` is reached or `deferDeadline` has passed, hermes automatically hides any buttons (or dropdown options) that trigger a deferral. If a button has no other action (e.g. it was purely a defer button), it is removed entirely. This forces the user to choose a non-deferral action (e.g. "Restart Now") or let the timeout expire.
+When `max_defers` is reached or `defer_deadline` has passed, hermes automatically hides any buttons (or dropdown options) that trigger a deferral. If a button has no other action (e.g. it was purely a defer button), it is removed entirely. This forces the user to choose a non-deferral action (e.g. "Restart Now") or let the timeout expire.
 
 ### Image carousel
 
@@ -194,7 +194,7 @@ Monitor filesystem paths for changes during the notification. When a watched pat
 {
   "heading": "Installing Security Agent",
   "message": "Click Install, then wait for confirmation.",
-  "watchPaths": [
+  "watch_paths": [
     "/var/db/receipts/com.example.agent.plist",
     "/Library/Application Support/SecurityAgent/version.txt"
   ],
@@ -248,20 +248,20 @@ Define progressive urgency that mutates the notification each time the user defe
 {
   "heading": "Restart Required",
   "message": "Security updates need a restart.",
-  "maxDefers": 5,
-  "deferDeadline": "24h",
+  "max_defers": 5,
+  "defer_deadline": "24h",
   "escalation": [
     {
-      "afterDefers": 2,
+      "after_defers": 2,
       "timeout": 120,
-      "accentColor": "#FF6600",
-      "messageSuffix": "\n\nThis action is required soon."
+      "accent_color": "#FF6600",
+      "message_suffix": "\n\nThis action is required soon."
     },
     {
-      "afterDefers": 4,
+      "after_defers": 4,
       "timeout": 60,
-      "accentColor": "#FF0000",
-      "messageSuffix": "\n\nFINAL NOTICE: Action required immediately."
+      "accent_color": "#FF0000",
+      "message_suffix": "\n\nFINAL NOTICE: Action required immediately."
     }
   ]
 }
@@ -279,14 +279,14 @@ Map user responses to automatic follow-up actions. The action runs server-side a
     {"label": "Restart Now", "value": "restart", "style": "primary"},
     {"label": "Open Wiki", "value": "wiki", "style": "secondary"}
   ],
-  "resultActions": {
+  "result_actions": {
     "restart": "cmd:shutdown /r /t 60",
     "wiki": "url:https://wiki.example.com/vpn"
   }
 }
 ```
 
-Supported prefixes: `cmd:` (shell command) and `url:` (opens in browser). Actions also fire on timeout if `timeoutValue` matches a key (e.g. `"timeout:restart"` matches `"restart"`).
+Supported prefixes: `cmd:` (shell command) and `url:` (opens in browser). Actions also fire on timeout if `timeout_value` matches a key (e.g. `"timeout:restart"` matches `"restart"`).
 
 ### Quiet hours
 
@@ -294,7 +294,7 @@ Suppress notifications during specified hours. The service delays delivery until
 
 ```json
 {
-  "quietHours": {
+  "quiet_hours": {
     "start": "22:00",
     "end": "07:00",
     "timezone": "America/Los_Angeles"
@@ -311,13 +311,13 @@ Provide translated heading and message text. The resolved locale selects the bes
 ```json
 {
   "heading": "Restart Required",
-  "headingLocalized": {
+  "heading_localized": {
     "ja": "再起動が必要です",
     "de": "Neustart erforderlich",
     "es": "Reinicio requerido"
   },
   "message": "Please restart to apply updates.",
-  "messageLocalized": {
+  "message_localized": {
     "ja": "アップデートを適用するため再起動してください。",
     "de": "Ihr Computer muss neu gestartet werden."
   }
@@ -343,7 +343,7 @@ Create multi-step workflows where notification B waits for notification A:
 
 ```json
 {"id": "accept-eula", "heading": "Accept EULA", ...}
-{"id": "apply-update", "dependsOn": "accept-eula", "heading": "Install Update", ...}
+{"id": "apply-update", "depends_on": "accept-eula", "heading": "Install Update", ...}
 ```
 
 The second notification is held in `waiting_on_dependency` state until the first completes. Submit both to the service — the manager handles sequencing automatically.
@@ -426,9 +426,9 @@ $config = @'
   "heading": "System Restart Required",
   "message": "Your computer needs to restart.",
   "timeout": 300,
-  "timeoutValue": "restart",
-  "deferDeadline": "24h",
-  "maxDefers": 3,
+  "timeout_value": "restart",
+  "defer_deadline": "24h",
+  "max_defers": 3,
   "buttons": [
     {"label": "Defer 1h", "value": "defer_1h", "style": "secondary"},
     {"label": "Restart Now", "value": "restart", "style": "primary"}

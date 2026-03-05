@@ -3,9 +3,9 @@
   "message": "Please review and accept the updated EULA before proceeding with the system update. By clicking Accept, you agree to the terms.",
   "id": "accept-eula",
   "timeout": 600,
-  "timeoutValue": "defer_1h",
+  "timeout_value": "defer_1h",
   "title": "IT Department",
-  "accentColor": "#D4A843",
+  "accent_color": "#D4A843",
   "priority": 9,
   "buttons": [
     { "label": "Accept", "value": "accepted", "style": "primary" },

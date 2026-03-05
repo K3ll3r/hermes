@@ -2,11 +2,11 @@
   "heading": "VPN Disconnecting",
   "message": "Your VPN session will be disconnected for network maintenance. Reconnect after the maintenance window.",
   "title": "Network Ops",
-  "accentColor": "#D4A843",
+  "accent_color": "#D4A843",
   "timeout": 120,
-  "timeoutValue": "disconnect",
-  "escValue": "defer_1h",
-  "helpUrl": "https://example.com/help/vpn-maintenance",
+  "timeout_value": "disconnect",
+  "esc_value": "defer_1h",
+  "help_url": "https://example.com/help/vpn-maintenance",
   "buttons": [
     {
       "label": "Defer",

@@ -90,7 +90,7 @@ First step in a dependency chain. Step 2 waits until this is accepted.
 
 ### Workflow step 2 — Update
 
-Blocked by `dependsOn: accept-eula`. Only shown after step 1 completes.
+Blocked by `depends_on: accept-eula`. Only shown after step 1 completes.
 
 ![workflow-step2-update](workflow-step2-update.png)
 

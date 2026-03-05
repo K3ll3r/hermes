@@ -2,17 +2,17 @@
   "heading": "System Update Ready",
   "message": "The security update is ready to install. Your computer will restart automatically after the update completes.",
   "id": "apply-update",
-  "dependsOn": "accept-eula",
+  "depends_on": "accept-eula",
   "timeout": 300,
-  "timeoutValue": "restart",
+  "timeout_value": "restart",
   "title": "IT Department",
-  "accentColor": "#D4A843",
+  "accent_color": "#D4A843",
   "priority": 9,
   "buttons": [
     { "label": "Install & Restart", "value": "restart", "style": "primary" },
     { "label": "Defer 1h", "value": "defer_1h", "style": "secondary" }
   ],
-  "resultActions": {
+  "result_actions": {
     "restart": "url:https://github.com/TsekNet/hermes"
   }
 }

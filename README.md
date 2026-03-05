@@ -64,10 +64,10 @@ hermes --local testdata/restart-notification.json
 ### Deferrals
 
 ```bash
-hermes notify '{"heading":"Restart","message":"Please restart.","deferDeadline":"24h","maxDefers":3,"buttons":[{"label":"Defer 1h","value":"defer_1h","style":"secondary"},{"label":"Restart","value":"restart","style":"primary"}]}'
+hermes notify '{"heading":"Restart","message":"Please restart.","defer_deadline":"24h","max_defers":3,"buttons":[{"label":"Defer 1h","value":"defer_1h","style":"secondary"},{"label":"Restart","value":"restart","style":"primary"}]}'
 ```
 
-The service tracks deferrals per notification, persisted to disk. When the user defers, the notification reappears after the specified interval — even across service restarts. After `maxDefers` or `deferDeadline`, the notification auto-actions.
+The service tracks deferrals per notification, persisted to disk. When the user defers, the notification reappears after the specified interval — even across service restarts. After `max_defers` or `defer_deadline`, the notification auto-actions.
 
 ## Features
 
@@ -86,7 +86,7 @@ The service tracks deferrals per notification, persisted to disk. When the user 
 | **Escalation ladder** | Progressive urgency after repeated deferrals — shorter timeout, warning color, urgency text. |
 | **Action chaining** | Map user responses to automatic follow-up actions (`cmd:` or `url:` prefix). |
 | **Quiet hours** | Time-based delivery suppression. Overnight ranges supported. |
-| **Localization** | `headingLocalized` / `messageLocalized` maps + `--locale` flag for multi-language notifications. |
+| **Localization** | `heading_localized` / `message_localized` maps + `--locale` flag for multi-language notifications. |
 | **Dependencies** | Sequential workflows: notification B waits for notification A to complete. |
 
 ## Why web-based

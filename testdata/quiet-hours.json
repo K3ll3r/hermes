@@ -2,11 +2,11 @@
   "heading": "Software Update Available",
   "message": "A new version of the security agent is available. Click Update to install.",
   "timeout": 300,
-  "timeoutValue": "defer_4h",
+  "timeout_value": "defer_4h",
   "title": "IT Department",
-  "accentColor": "#D4A843",
+  "accent_color": "#D4A843",
   "priority": 5,
-  "quietHours": {
+  "quiet_hours": {
     "start": "22:00",
     "end": "07:00",
     "timezone": "America/Los_Angeles"
@@ -15,7 +15,7 @@
     { "label": "Update Now", "value": "update", "style": "primary" },
     { "label": "Defer 4h", "value": "defer_4h", "style": "secondary" }
   ],
-  "resultActions": {
+  "result_actions": {
     "update": "url:https://github.com/TsekNet/hermes"
   }
 }

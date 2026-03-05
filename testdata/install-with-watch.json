@@ -2,10 +2,10 @@
   "heading": "Security Agent Installation",
   "message": "Click Install to begin. The notification will detect when the installation completes.",
   "title": "Platform Eng",
-  "accentColor": "#D4A843",
+  "accent_color": "#D4A843",
   "timeout": 600,
-  "timeoutValue": "timeout",
-  "watchPaths": [
+  "timeout_value": "timeout",
+  "watch_paths": [
     "/var/db/receipts/com.example.security-agent.plist"
   ],
   "buttons": [

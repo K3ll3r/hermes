@@ -22,9 +22,9 @@ type InboxEntry struct {
 	Heading       string `json:"heading"`
 	Message       string `json:"message"`
 	Source        string `json:"source"`
-	ResponseValue string `json:"responseValue"`
-	CreatedAt     string `json:"createdAt"`
-	CompletedAt   string `json:"completedAt"`
+	ResponseValue string `json:"response_value"`
+	CreatedAt     string `json:"created_at"`
+	CompletedAt   string `json:"completed_at"`
 }
 
 // InboxApp is the Wails backend for the inbox view.

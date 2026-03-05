@@ -476,7 +476,7 @@ func TestLoadJSON_Images(t *testing.T) {
 
 func TestLoadJSON_WatchPaths(t *testing.T) {
 	t.Parallel()
-	input := `{"heading":"H","message":"M","watchPaths":["/tmp/receipt","/var/log/install.log"]}`
+	input := `{"heading":"H","message":"M","watch_paths":["/tmp/receipt","/var/log/install.log"]}`
 	cfg, err := LoadJSON([]byte(input))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -757,7 +757,7 @@ func TestValidate_Escalation(t *testing.T) {
 		errSubstr string
 	}{
 		{"valid", []EscalationStep{{AfterDefers: 2}}, false, ""},
-		{"afterDefers 0", []EscalationStep{{AfterDefers: 0}}, true, "afterDefers must be >= 1"},
+		{"afterDefers 0", []EscalationStep{{AfterDefers: 0}}, true, "after_defers must be >= 1"},
 	}
 
 	for _, tt := range tests {
@@ -781,9 +781,9 @@ func TestValidate_QuietHours(t *testing.T) {
 	}{
 		{"nil is valid", nil, false, ""},
 		{"valid", &QuietHours{Start: "22:00", End: "07:00"}, false, ""},
-		{"bad start", &QuietHours{Start: "bad", End: "07:00"}, true, "quietHours.start"},
-		{"bad end", &QuietHours{Start: "22:00", End: "bad"}, true, "quietHours.end"},
-		{"bad timezone", &QuietHours{Start: "22:00", End: "07:00", Timezone: "Fake/Zone"}, true, "quietHours.timezone"},
+		{"bad start", &QuietHours{Start: "bad", End: "07:00"}, true, "quiet_hours.start"},
+		{"bad end", &QuietHours{Start: "22:00", End: "bad"}, true, "quiet_hours.end"},
+		{"bad timezone", &QuietHours{Start: "22:00", End: "07:00", Timezone: "Fake/Zone"}, true, "quiet_hours.timezone"},
 	}
 
 	for _, tt := range tests {
@@ -809,7 +809,7 @@ func TestValidate_ResultActions(t *testing.T) {
 		{"valid cmd", map[string]string{"restart": "cmd:shutdown /r /t 60"}, false, ""},
 		{"valid url", map[string]string{"wiki": "url:https://wiki.example.com"}, false, ""},
 		{"valid https", map[string]string{"wiki": "https://wiki.example.com"}, false, ""},
-		{"bad prefix", map[string]string{"restart": "ftp://evil.com"}, true, "resultActions"},
+		{"bad prefix", map[string]string{"restart": "ftp://evil.com"}, true, "result_actions"},
 		{"key with newline", map[string]string{"bad\nkey": "cmd:echo"}, true, "newlines"},
 	}
 
