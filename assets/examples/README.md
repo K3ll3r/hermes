@@ -94,6 +94,12 @@ Blocked by `depends_on: accept-eula`. Only shown after step 1 completes.
 
 ![workflow-step2-update](workflow-step2-update.png)
 
+### SSH login banner (MOTD)
+
+Pending notification summary shown on SSH login for headless sessions. Installed to `/etc/profile.d/` (Linux/macOS) or `$PROFILE.AllUsersAllHosts` (Windows).
+
+![ssh-motd](ssh-motd.png)
+
 ### Notification history (inbox)
 
 Scrollable history of past notifications with outcome badges.
