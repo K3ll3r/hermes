@@ -61,11 +61,9 @@ jobs:
 
       - name: Install WiX (Windows)
         if: matrix.goos == 'windows'
-        shell: bash
         run: |
-          dotnet tool install --global wix
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          wix extension add -g WixToolset.Util.wixext
+          dotnet tool install --global wix --version 6.0.2
+          wix extension add WixToolset.Util.wixext/6.0.2
 
       - name: Build MSI (Windows)
         if: matrix.goos == 'windows'
