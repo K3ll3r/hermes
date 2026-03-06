@@ -91,7 +91,24 @@ jobs:
             chmod 644 "$PKG_ROOT/Library/LaunchAgents/com.tseknet.hermes.plist"
             cp ../../build/linux/hermes-motd.sh "$PKG_ROOT/etc/profile.d/hermes-motd.sh"
             chmod 644 "$PKG_ROOT/etc/profile.d/hermes-motd.sh"
+            cat > "$PKG_ROOT/usr/local/bin/hermes-uninstall" << 'UNSCRPT'
+            #!/bin/sh
+            set -e
+            launchctl bootout gui/$(id -u) /Library/LaunchAgents/com.tseknet.hermes.plist 2>/dev/null || true
+            rm -f /usr/local/bin/hermes /usr/local/bin/hermes-uninstall
+            rm -f /Library/LaunchAgents/com.tseknet.hermes.plist
+            rm -f /etc/profile.d/hermes-motd.sh
+            ZPROF=/etc/zprofile
+            if [ -f "$ZPROF" ]; then
+              sed -i '' '/hermes-profile\.d/d' "$ZPROF"
+            fi
+            pkgutil --forget com.tseknet.hermes 2>/dev/null || true
+            echo "Hermes uninstalled."
+            UNSCRPT
+            chmod 755 "$PKG_ROOT/usr/local/bin/hermes-uninstall"
             mkdir -p ../../pkgscripts
+            printf '%s\n' '#!/bin/sh' 'pkill -f "/usr/local/bin/hermes" 2>/dev/null || true' 'exit 0' > ../../pkgscripts/preinstall
+            chmod 755 ../../pkgscripts/preinstall
             printf '%s\n' '#!/bin/sh' 'ZPROF=/etc/zprofile' 'MARKER="# hermes-profile.d"' 'SNIPPET="if [ -d /etc/profile.d ]; then for f in /etc/profile.d/*.sh; do [ -r \"\$f\" ] && . \"\$f\"; done; fi $MARKER"' 'if [ ! -f "$ZPROF" ] || ! grep -q "$MARKER" "$ZPROF"; then' '  printf "%s\\n" "$SNIPPET" >> "$ZPROF"' 'fi' 'exit 0' > ../../pkgscripts/postinstall
             chmod 755 ../../pkgscripts/postinstall
             if [ "${{ matrix.goarch }}" = "amd64" ]; then
@@ -148,6 +165,29 @@ jobs:
           Maintainer: Hermes <admin@tseknet.com>
           Description: Cross-platform notification daemon (per-user gRPC + Wails UI)
           EOF
+          cat > "${PKG}/DEBIAN/prerm" << 'PRERM'
+          #!/bin/sh
+          set -e
+          pkill -f '/usr/local/bin/hermes' 2>/dev/null || true
+          for uid_dir in /run/user/*; do
+            uid=$(basename "$uid_dir")
+            DBUS_SESSION_BUS_ADDRESS="unix:path=$uid_dir/bus" \
+              sudo -u "#$uid" systemctl --user disable --now hermes.service 2>/dev/null || true
+          done
+          PRERM
+          chmod 755 "${PKG}/DEBIAN/prerm"
+          cat > "${PKG}/DEBIAN/postrm" << 'POSTRM'
+          #!/bin/sh
+          set -e
+          if [ "$1" = "purge" ] || [ "$1" = "remove" ]; then
+            rm -f /etc/profile.d/hermes.sh /etc/profile.d/hermes-motd.sh
+            rm -f /usr/lib/systemd/user/hermes.service
+            for home_dir in /home/*; do
+              rm -f "$home_dir/.config/systemd/user/hermes.service" 2>/dev/null || true
+            done
+          fi
+          POSTRM
+          chmod 755 "${PKG}/DEBIAN/postrm"
           dpkg-deb --root-owner-group -b "${PKG}" "hermes_${VERSION}.deb"
           cp "hermes_${VERSION}.deb" hermes.deb
           rm -rf "${PKG}"
@@ -164,6 +204,4 @@ jobs:
             dist/hermes_arm64.app.tar.gz
             dist/hermes.deb
             dist/hermes.msi
-            dist/hermes.pkg
-            dist/hermes_arm64.pkg
           generate_release_notes: true

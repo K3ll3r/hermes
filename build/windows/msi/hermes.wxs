@@ -9,10 +9,13 @@
     Scope="perMachine">
 
     <MajorUpgrade
-      DowngradeErrorMessage="A newer version of Hermes is already installed."
-      AllowSameVersionUpgrades="yes" />
+      AllowDowngrades="yes"
+      DowngradeErrorMessage="A newer version of Hermes is already installed." />
 
     <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="HermesIcon" SourceFile="$(var.StagingDir)/hermes.exe" />
+    <Property Id="ARPPRODUCTICON" Value="HermesIcon" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="HermesDir" Name="Hermes">
@@ -31,8 +34,18 @@
         <Component Id="HermesAutostart" Guid="D4E5F6A7-B890-1234-CDEF-567890ABCDEF">
           <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run" Name="Hermes" Value="&quot;[HermesDir]hermes.exe&quot; serve" Type="string" KeyPath="yes" />
         </Component>
+        <Component Id="CleanupDir" Guid="E5F6A7B8-C901-2345-DEFG-678901BCDEF0">
+          <RemoveFolder Id="RemoveHermesDir" On="uninstall" />
+          <RegistryValue Root="HKLM" Key="SOFTWARE\TsekNet\Hermes" Name="Cleanup" Value="1" Type="integer" KeyPath="yes" />
+        </Component>
       </Directory>
     </StandardDirectory>
+
+    <SetProperty Id="StopHermes" Before="StopHermes" Sequence="execute"
+      Value="&quot;[SystemFolder]taskkill.exe&quot; /F /IM hermes.exe" />
+    <CustomAction Id="StopHermes"
+      BinaryRef="Wix4UtilCA_X86" DllEntry="WixQuietExec"
+      Execute="deferred" Impersonate="no" Return="ignore" />
 
     <SetProperty Id="InstallMotdHook" Before="InstallMotdHook" Sequence="execute"
       Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[HermesDir]install-motd-hook.ps1&quot;" />
@@ -47,6 +60,7 @@
       Execute="deferred" Impersonate="no" Return="ignore" />
 
     <InstallExecuteSequence>
+      <Custom Action="StopHermes" Before="InstallValidate" Condition="REMOVE=&quot;ALL&quot; OR UPGRADINGPRODUCTCODE" />
       <Custom Action="InstallMotdHook" Before="InstallFinalize" Condition="NOT Installed OR UPGRADINGPRODUCTCODE" />
       <Custom Action="RemoveMotdHook" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
     </InstallExecuteSequence>
@@ -57,6 +71,7 @@
       <ComponentRef Id="HermesMotdInstallHook" />
       <ComponentRef Id="HermesMotdRemoveHook" />
       <ComponentRef Id="HermesAutostart" />
+      <ComponentRef Id="CleanupDir" />
     </Feature>
   </Package>
 </Wix>
