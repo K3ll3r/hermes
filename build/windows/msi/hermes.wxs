@@ -39,7 +39,7 @@
       </Directory>
     </StandardDirectory>
 
-    <CustomAction Id="StopHermes" Directory="HermesDir"
+    <CustomAction Id="StopHermes" Directory="SystemFolder"
       ExeCommand="cmd.exe /c taskkill /F /IM hermes.exe"
       Execute="immediate" Return="ignore" />
 
@@ -58,7 +58,7 @@
     <InstallExecuteSequence>
       <Custom Action="StopHermes" Before="InstallValidate" Condition="REMOVE=&quot;ALL&quot; OR UPGRADINGPRODUCTCODE" />
       <Custom Action="InstallMotdHook" Before="InstallFinalize" Condition="NOT Installed OR UPGRADINGPRODUCTCODE" />
-      <Custom Action="RemoveMotdHook" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="RemoveMotdHook" Before="InstallFinalize" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
     </InstallExecuteSequence>
 
     <Feature Id="ProductFeature" Title="Hermes" Level="1">
