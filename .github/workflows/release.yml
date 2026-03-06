@@ -57,7 +57,7 @@ jobs:
           if [ "${{ matrix.goos }}" = "linux" ]; then
             BUILD_FLAGS="$BUILD_FLAGS -tags webkit2_41"
           fi
-          eval wails build $BUILD_FLAGS
+          eval wails build -skipbindings $BUILD_FLAGS
 
       - name: Install WiX (Windows)
         if: matrix.goos == 'windows'
