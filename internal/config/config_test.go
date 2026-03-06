@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -399,8 +400,9 @@ func TestValidate_WatchPaths(t *testing.T) {
 	}{
 		{name: "nil", paths: nil},
 		{name: "valid paths", paths: []string{"/tmp/receipt", "/var/log/install.log"}},
+		{name: "exactly at limit", paths: []string{"/a", "/b", "/c", "/d", "/e"}},
 		{name: "path traversal blocked", paths: []string{"/tmp/../etc/passwd"}, wantErr: true, errSubstr: "path traversal"},
-		{name: "too many paths", paths: make([]string, 11), wantErr: true, errSubstr: "exceeds maximum"},
+		{name: "too many paths", paths: make([]string, 6), wantErr: true, errSubstr: "exceeds maximum"},
 	}
 
 	for _, tt := range tests {
@@ -445,17 +447,29 @@ func TestResolvedDND(t *testing.T) {
 
 func TestValidate_ImageLimit(t *testing.T) {
 	t.Parallel()
-	imgs := make([]string, 21)
+	imgs := make([]string, 6)
 	for i := range imgs {
 		imgs[i] = "https://example.com/slide.png"
 	}
 	cfg := NotificationConfig{Heading: "H", Message: "M", Images: imgs}
 	err := cfg.Validate()
 	if err == nil {
-		t.Fatal("expected error for >20 images")
+		t.Fatal("expected error for >5 images")
 	}
 	if !strings.Contains(err.Error(), "exceeds maximum") {
 		t.Errorf("error %q missing 'exceeds maximum'", err)
+	}
+}
+
+func TestValidate_ImageLimit_AtBoundary(t *testing.T) {
+	t.Parallel()
+	imgs := make([]string, 5)
+	for i := range imgs {
+		imgs[i] = "https://example.com/slide.png"
+	}
+	cfg := NotificationConfig{Heading: "H", Message: "M", Images: imgs}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("5 images should be valid, got: %v", err)
 	}
 }
 
@@ -811,6 +825,13 @@ func TestValidate_ResultActions(t *testing.T) {
 		{"valid https", map[string]string{"wiki": "https://wiki.example.com"}, false, ""},
 		{"bad prefix", map[string]string{"restart": "ftp://evil.com"}, true, "result_actions"},
 		{"key with newline", map[string]string{"bad\nkey": "cmd:echo"}, true, "newlines"},
+		{"too many actions", func() map[string]string {
+			m := make(map[string]string, 11)
+			for i := range 11 {
+				m[fmt.Sprintf("k%d", i)] = fmt.Sprintf("cmd:echo %d", i)
+			}
+			return m
+		}(), true, "exceeds maximum"},
 	}
 
 	for _, tt := range tests {

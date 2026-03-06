@@ -50,7 +50,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	}
 	defer s.Close()
 
-	if err := s.PruneHistory(30*24*time.Hour, 200); err != nil {
+	if err := s.PruneHistory(30*24*time.Hour, 50); err != nil {
 		deck.Warningf("prune history: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 		deck.Infof("restored %d notification(s) from disk", restored)
 	}
 
-	rl := ratelimit.New(10, 2, []string{"/hermes.HermesService/Notify"})
+	rl := ratelimit.New(5, 1, []string{"/hermes.HermesService/Notify"})
 
 	var interceptors []grpc.UnaryServerInterceptor
 	interceptors = append(interceptors, auth.UnaryInterceptor(token))

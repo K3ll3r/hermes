@@ -39,7 +39,7 @@ hermes inbox --json       # Prints history as JSON to stdout
 hermes inbox --db my.db   # Read directly from a bolt DB file (skip service)
 ```
 
-The inbox connects to the running service via gRPC. If the service is unreachable, it falls back to reading the bolt database directly. History is auto-pruned on service startup: records older than 30 days or exceeding 200 entries are removed.
+The inbox connects to the running service via gRPC. If the service is unreachable, it falls back to reading the bolt database directly. History is auto-pruned on service startup: records older than 30 days or exceeding 50 entries are removed.
 
 ---
 
@@ -73,12 +73,12 @@ hermes accepts a single JSON or YAML config with these fields:
 | `id` | string | no | auto-generated | Unique notification ID for the service |
 | `defer_deadline` | string | no | `""` | Max deferral window (e.g., `"24h"`, `"7d"`) |
 | `max_defers` | int | no | `0` | Max number of deferrals (0 = unlimited) |
-| `images` | array | no | `[]` | HTTPS URLs or `data:image/` URIs for a carousel (max 20, no SVG data URIs) |
-| `watch_paths` | array | no | `[]` | Filesystem paths to monitor for changes (max 10, no `..` traversal) |
+| `images` | array | no | `[]` | HTTPS URLs or `data:image/` URIs for a carousel (max 5, no SVG data URIs) |
+| `watch_paths` | array | no | `[]` | Filesystem paths to monitor for changes (max 5, no `..` traversal) |
 | `dnd` | string | no | `"respect"` | Do Not Disturb behavior: `"respect"`, `"ignore"`, or `"skip"` |
 | `priority` | int | no | `5` | Delivery priority (0-10). Higher = shown first in queue drain |
 | `escalation` | array | no | `[]` | Progressive urgency steps applied after repeated deferrals (see below) |
-| `result_actions` | object | no | `{}` | Maps response values to automatic actions (action chaining, see below) |
+| `result_actions` | object | no | `{}` | Maps response values to automatic actions (max 10 entries; action chaining, see below) |
 | `quiet_hours` | object | no | `null` | Time-based delivery suppression (see below) |
 | `heading_localized` | object | no | `{}` | Locale → heading text map for i18n |
 | `message_localized` | object | no | `{}` | Locale → message text map for i18n |
@@ -184,7 +184,7 @@ Embed images (documentation slides, screenshots, diagrams) in the notification. 
 }
 ```
 
-Images must be `https://` URLs or `data:image/` URIs (no SVG). Maximum 20 per notification.
+Images must be `https://` URLs or `data:image/` URIs (no SVG). Maximum 5 per notification.
 
 ### Filesystem watch
 
@@ -384,7 +384,7 @@ The second notification is held in `waiting_on_dependency` state until the first
 | Code | Meaning |
 |------|---------|
 | `0` | User chose an action (response on stdout) or dismissed (empty stdout) |
-| `1` | Error (bad config, validation, or launch failure) |
+| `1` | Error (bad config, validation, launch failure, or at capacity) |
 | `200` | User deferred (response on stdout, starts with `defer`) |
 | `202` | Timeout (countdown expired, auto-actioned per config) |
 | `203` | Queued (service unreachable, notification saved for later delivery; stdout: `queued`) |

@@ -174,7 +174,7 @@ Override with `hermes serve --db /path/to/hermes.db`.
 
 When a notification completes (user action, timeout, or cancellation), the manager saves a `HistoryRecord` to a separate `history` bbolt bucket. This powers the inbox feature (`hermes inbox`).
 
-On startup, the service prunes history records older than 30 days or exceeding 200 entries. The `PruneHistory` method enforces both age and count limits in a single pass.
+On startup, the service prunes history records older than 30 days or exceeding 50 entries. The `PruneHistory` method enforces both age and count limits in a single pass.
 
 ### Offline queue {#offline-queue}
 
@@ -263,9 +263,13 @@ Every gRPC call must include the token in the `authorization` metadata header. T
 
 This prevents blind port-scanning processes from interacting with the service. Only processes that can read the user's token file (same UID, `0600`) can send or read notifications.
 
+### Capacity limits
+
+The service accepts at most 10 active notifications (showing, deferred, or waiting on a dependency). New `Notify` submissions are rejected with exit code `1` when at capacity. This prevents compromised automation from flooding the user's desktop.
+
 ### Rate limiting
 
-The `Notify` RPC is rate-limited to a burst of 10 with a refill rate of 2/second. This prevents runaway scripts from spamming the user with notifications. Other RPCs (List, Cancel, etc.) are not rate-limited.
+The `Notify` RPC is rate-limited to a burst of 5 with a refill rate of 1/second. This prevents runaway scripts from spamming the user with notifications. Other RPCs (List, Cancel, etc.) are not rate-limited.
 
 RPCs:
 

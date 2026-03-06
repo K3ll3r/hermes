@@ -360,8 +360,8 @@ func (c *NotificationConfig) Validate() error {
 	if c.DND != "" && c.DND != DNDRespect && c.DND != DNDIgnore && c.DND != DNDSkip {
 		errs = append(errs, fmt.Sprintf(`"dnd" must be %q, %q, or %q`, DNDRespect, DNDIgnore, DNDSkip))
 	}
-	if len(c.Images) > 20 {
-		errs = append(errs, fmt.Sprintf("images: %d exceeds maximum of 20", len(c.Images)))
+	if len(c.Images) > 5 {
+		errs = append(errs, fmt.Sprintf("images: %d exceeds maximum of 5", len(c.Images)))
 	}
 	for i, img := range c.Images {
 		lower := strings.ToLower(img)
@@ -377,8 +377,8 @@ func (c *NotificationConfig) Validate() error {
 			}
 		}
 	}
-	if len(c.WatchPaths) > 10 {
-		errs = append(errs, fmt.Sprintf("watch_paths: %d exceeds maximum of 10", len(c.WatchPaths)))
+	if len(c.WatchPaths) > 5 {
+		errs = append(errs, fmt.Sprintf("watch_paths: %d exceeds maximum of 5", len(c.WatchPaths)))
 	}
 	for i, p := range c.WatchPaths {
 		if strings.Contains(p, "..") {
@@ -406,8 +406,8 @@ func (c *NotificationConfig) Validate() error {
 			}
 		}
 	}
-	if len(c.ResultActions) > 20 {
-		errs = append(errs, fmt.Sprintf("result_actions: %d entries exceeds maximum of 20", len(c.ResultActions)))
+	if len(c.ResultActions) > 10 {
+		errs = append(errs, fmt.Sprintf("result_actions: %d entries exceeds maximum of 10", len(c.ResultActions)))
 	}
 	for k, v := range c.ResultActions {
 		if strings.ContainsAny(k, "\n\r") {

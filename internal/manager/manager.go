@@ -59,9 +59,11 @@ type Result struct {
 	ExitCode int32
 }
 
-// MaxActiveNotifications is the ceiling on concurrent notifications.
-// Prevents resource exhaustion from rapid-fire Notify calls.
-const MaxActiveNotifications = 50
+// MaxActiveNotifications caps submitted-but-incomplete notifications
+// (showing, deferred, blocked by depends_on). Rejects new submissions
+// when at capacity. Keep low: a user with 10 pending items is already
+// overwhelmed; higher values just enable spam from compromised automation.
+const MaxActiveNotifications = 10
 
 // Manager holds the set of active notifications.
 type Manager struct {
