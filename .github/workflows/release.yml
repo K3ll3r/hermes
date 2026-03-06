@@ -159,5 +159,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: |
+            dist/hermes.app.tar.gz
+            dist/hermes_arm64.app.tar.gz
+            dist/hermes.deb
+            dist/hermes.msi
           generate_release_notes: true
