@@ -15,6 +15,6 @@ printf '\n-- Hermes: %d pending notification(s) --\n' "$_hermes_count"
 printf '%s\n' "$_hermes_headings" | head -5 | while IFS= read -r _h; do printf '  * %s\n' "$_h"; done
 [ "$_hermes_count" -gt 5 ] && printf '  ... and %d more\n' $((_hermes_count - 5))
 printf "Run 'hermes inbox' for details.\n"
-printf '----------------------------------------\n\n'
+printf '%s\n\n' '----------------------------------------'
 
 unset _hermes_json _hermes_headings _hermes_count

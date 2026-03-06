@@ -36,6 +36,6 @@ Users who connect via SSH without a desktop session won't see the Wails UI. The 
 |----------|-----------|
 | Linux | `/etc/profile.d/hermes-motd.sh` (installed by .deb) |
 | macOS | `/etc/profile.d/hermes-motd.sh` (installed by .pkg; postinstall ensures zsh sources profile.d) |
-| Windows | Guarded one-liner in `$PSHOME\Profile.ps1` and `$env:ProgramFiles\PowerShell\7\Profile.ps1` (installed by MSI) |
+| Windows | Guarded one-liner in `$PROFILE.AllUsersAllHosts` (installed by MSI) |
 
 The banner only appears for SSH sessions (detected via `$SSH_CLIENT` / `$SSH_TTY` on Unix, `$env:SSH_CLIENT` / `$env:SSH_CONNECTION` on Windows). It runs `hermes inbox --json` and prints a summary. Silent when there are no pending notifications. Run `hermes inbox` for full details.
