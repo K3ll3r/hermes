@@ -98,32 +98,35 @@ func (a *App) DeferralAllowed() bool { return a.deferAllowed }
 
 // Ready is called by the frontend after it has populated all UI elements.
 // It positions the window in the platform's notification corner and reveals it.
+//
+// WindowCenter uses the work area (excludes taskbar/menu bar/dock) on all
+// platforms: Win32 MonitorInfo.rcWork, Cocoa visibleFrame, GTK workarea.
+// We center, read back the position to learn the work-area center, then
+// compute the notification corner from that.
 func (a *App) Ready() {
 	const margin = 12
 
 	wailsRuntime.WindowCenter(a.ctx)
 	cx, cy := wailsRuntime.WindowGetPosition(a.ctx)
+	w, h := wailsRuntime.WindowGetSize(a.ctx)
 
-	wailsRuntime.WindowSetPosition(a.ctx, 0, 0)
-	ox, oy := wailsRuntime.WindowGetPosition(a.ctx)
+	// cx,cy is the top-left when centered in the work area.
+	// Work-area width  ≈ cx + w/2 + (cx + w/2 - workOriginX) → simplified: 2*cx + w
+	// This holds because center places the window at (waW-w)/2 from the work-area origin.
+	waW := 2*cx + w
+	waH := 2*cy + h
 
-	x := 2*(cx-ox) - margin
+	x := waW - w - margin
 
 	var y int
 	switch goRuntime.GOOS {
 	case "windows":
-		// Bottom-right: matches Action Center / native toasts.
-		// Cocoa-style y math: large y = bottom of work area.
-		y = 2*(cy-oy) - margin
+		y = waH - h - margin
 	default:
-		// macOS top-right (Cocoa y-axis: 0 = bottom, menu bar = top).
-		// WKWebView reports origin (0,0) at bottom-left; adding margin
-		// from the origin places the window just below the menu bar.
-		// Linux top-right (GTK y-down): margin from top edge.
-		y = oy + margin
+		y = margin
 	}
 
-	deck.Infof("positioning: center=(%d,%d) origin=(%d,%d) -> (%d,%d)", cx, cy, ox, oy, x, y)
+	deck.Infof("positioning: workarea≈%dx%d window=%dx%d center=(%d,%d) -> (%d,%d)", waW, waH, w, h, cx, cy, x, y)
 	wailsRuntime.WindowSetPosition(a.ctx, x, y)
 	wailsRuntime.WindowShow(a.ctx)
 }

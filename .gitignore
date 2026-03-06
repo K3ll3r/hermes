@@ -3,6 +3,7 @@
 /hermes.exe
 /hermes_*
 build/bin/
+dist/
 
 # IDE
 .idea/
@@ -22,6 +23,7 @@ coverage.txt
 
 # Wails
 frontend/wailsjs/
+build/windows/icon.ico
 
 # Node
 node_modules/
