@@ -51,9 +51,6 @@ jobs:
         run: |
           BUILD_FLAGS="-platform ${{ matrix.goos }}/${{ matrix.goarch }}"
           BUILD_FLAGS="$BUILD_FLAGS -ldflags \"-s -w -X github.com/TsekNet/hermes/cmd.Version=${{ github.ref_name }} -X github.com/TsekNet/hermes/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            :  # GUI subsystem — no console window on launch
-          fi
           if [ "${{ matrix.goos }}" = "linux" ]; then
             BUILD_FLAGS="$BUILD_FLAGS -tags webkit2_41"
           fi
@@ -61,9 +58,7 @@ jobs:
 
       - name: Install WiX (Windows)
         if: matrix.goos == 'windows'
-        run: |
-          dotnet tool install --global wix --version 6.0.2
-          wix extension add WixToolset.Util.wixext/6.0.2
+        run: dotnet tool install --global wix --version 6.0.2
 
       - name: Build MSI (Windows)
         if: matrix.goos == 'windows'
@@ -71,11 +66,8 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p dist
-          cp build/windows/msi/hermes-motd.ps1 build/bin/
-          cp build/windows/msi/install-motd-hook.ps1 build/bin/
-          cp build/windows/msi/remove-motd-hook.ps1 build/bin/
           export PATH="$PATH:$HOME/.dotnet/tools"
-          wix build build/windows/msi/hermes.wxs -arch x64 -ext WixToolset.Util.wixext -d Version="$VERSION" -d StagingDir=build/bin -o dist/hermes.msi
+          wix build build/windows/msi/hermes.wxs -arch x64 -d Version="$VERSION" -d StagingDir=build/bin -o dist/hermes.msi
 
       - name: Package release artifacts
         shell: bash
@@ -84,19 +76,36 @@ jobs:
           if [ "${{ matrix.goos }}" = "darwin" ]; then
             cd build/bin
             PKG_ROOT="../../pkgroot"
-            mkdir -p "$PKG_ROOT/usr/local/bin" "$PKG_ROOT/Library/LaunchAgents" "$PKG_ROOT/etc/profile.d"
+            mkdir -p "$PKG_ROOT/usr/local/bin" "$PKG_ROOT/Library/LaunchAgents"
             cp hermes.app/Contents/MacOS/hermes "$PKG_ROOT/usr/local/bin/"
             chmod 755 "$PKG_ROOT/usr/local/bin/hermes"
-            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' '<plist version="1.0">' '<dict>' '  <key>Label</key><string>com.tseknet.hermes</string>' '  <key>ProgramArguments</key>' '  <array><string>/usr/local/bin/hermes</string><string>serve</string></array>' '  <key>RunAtLoad</key><true/>' '  <key>KeepAlive</key><true/>' '</dict>' '</plist>' > "$PKG_ROOT/Library/LaunchAgents/com.tseknet.hermes.plist"
+            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
+              '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+              '<plist version="1.0">' '<dict>' \
+              '  <key>Label</key><string>com.tseknet.hermes</string>' \
+              '  <key>ProgramArguments</key>' \
+              '  <array><string>/usr/local/bin/hermes</string><string>serve</string></array>' \
+              '  <key>RunAtLoad</key><true/>' \
+              '  <key>KeepAlive</key><true/>' \
+              '</dict>' '</plist>' > "$PKG_ROOT/Library/LaunchAgents/com.tseknet.hermes.plist"
             chmod 644 "$PKG_ROOT/Library/LaunchAgents/com.tseknet.hermes.plist"
-            cp ../../build/linux/hermes-motd.sh "$PKG_ROOT/etc/profile.d/hermes-motd.sh"
-            chmod 644 "$PKG_ROOT/etc/profile.d/hermes-motd.sh"
-            printf '%s\n' '#!/bin/sh' 'set -e' 'launchctl bootout gui/$(id -u) /Library/LaunchAgents/com.tseknet.hermes.plist 2>/dev/null || true' 'rm -f /usr/local/bin/hermes /usr/local/bin/hermes-uninstall' 'rm -f /Library/LaunchAgents/com.tseknet.hermes.plist' 'rm -f /etc/profile.d/hermes-motd.sh' 'ZPROF=/etc/zprofile' 'if [ -f "$ZPROF" ]; then sed -i "" "/hermes-profile\.d/d" "$ZPROF"; fi' 'pkgutil --forget com.tseknet.hermes 2>/dev/null || true' 'echo "Hermes uninstalled."' > "$PKG_ROOT/usr/local/bin/hermes-uninstall"
+            printf '%s\n' '#!/bin/sh' \
+              'set -e' \
+              'launchctl bootout gui/$(id -u) /Library/LaunchAgents/com.tseknet.hermes.plist 2>/dev/null || true' \
+              'rm -f /usr/local/bin/hermes /usr/local/bin/hermes-uninstall' \
+              'rm -f /Library/LaunchAgents/com.tseknet.hermes.plist' \
+              '/usr/local/bin/hermes uninstall 2>/dev/null || true' \
+              'pkgutil --forget com.tseknet.hermes 2>/dev/null || true' \
+              'echo "Hermes uninstalled."' > "$PKG_ROOT/usr/local/bin/hermes-uninstall"
             chmod 755 "$PKG_ROOT/usr/local/bin/hermes-uninstall"
             mkdir -p ../../pkgscripts
-            printf '%s\n' '#!/bin/sh' 'pkill -f "/usr/local/bin/hermes" 2>/dev/null || true' 'exit 0' > ../../pkgscripts/preinstall
+            printf '%s\n' '#!/bin/sh' \
+              '/usr/local/bin/hermes stop 2>/dev/null || true' \
+              'exit 0' > ../../pkgscripts/preinstall
             chmod 755 ../../pkgscripts/preinstall
-            printf '%s\n' '#!/bin/sh' 'ZPROF=/etc/zprofile' 'MARKER="# hermes-profile.d"' 'SNIPPET="if [ -d /etc/profile.d ]; then for f in /etc/profile.d/*.sh; do [ -r \"\$f\" ] && . \"\$f\"; done; fi $MARKER"' 'if [ ! -f "$ZPROF" ] || ! grep -q "$MARKER" "$ZPROF"; then' '  printf "%s\\n" "$SNIPPET" >> "$ZPROF"' 'fi' 'exit 0' > ../../pkgscripts/postinstall
+            printf '%s\n' '#!/bin/sh' \
+              '/usr/local/bin/hermes install 2>/dev/null || true' \
+              'exit 0' > ../../pkgscripts/postinstall
             chmod 755 ../../pkgscripts/postinstall
             if [ "${{ matrix.goarch }}" = "amd64" ]; then
               pkgbuild --identifier com.tseknet.hermes --root "$PKG_ROOT" --install-location / --scripts ../../pkgscripts ../../dist/hermes.pkg
@@ -137,18 +146,33 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/v}"
           ARCH=amd64
           PKG=hermes_${VERSION}
-          mkdir -p "${PKG}/usr/local/bin" "${PKG}/usr/lib/systemd/user" "${PKG}/etc/profile.d"
+          mkdir -p "${PKG}/usr/local/bin" "${PKG}/usr/lib/systemd/user"
           cp -f hermes "${PKG}/usr/local/bin/"
           chmod 755 "${PKG}/usr/local/bin/hermes"
-          printf '%s\n' '[Unit]' 'Description=Hermes notification service' '' '[Service]' 'ExecStart=/usr/local/bin/hermes serve' 'Restart=on-failure' '' '[Install]' 'WantedBy=default.target' > "${PKG}/usr/lib/systemd/user/hermes.service"
-          printf '%s\n' 'if command -v systemctl >/dev/null 2>&1 && [[ -n "$HOME" ]]; then' '  mkdir -p "$HOME/.config/systemd/user"' '  [[ -f /usr/lib/systemd/user/hermes.service && ! -f "$HOME/.config/systemd/user/hermes.service" ]] && cp /usr/lib/systemd/user/hermes.service "$HOME/.config/systemd/user/"' '  systemctl --user enable --now hermes.service 2>/dev/null || true' 'fi' > "${PKG}/etc/profile.d/hermes.sh"
-          cp ../build/linux/hermes-motd.sh "${PKG}/etc/profile.d/hermes-motd.sh"
-          chmod 644 "${PKG}/usr/lib/systemd/user/hermes.service" "${PKG}/etc/profile.d/hermes.sh" "${PKG}/etc/profile.d/hermes-motd.sh"
+          printf '%s\n' '[Unit]' 'Description=Hermes notification service' '' \
+            '[Service]' 'ExecStart=/usr/local/bin/hermes serve' 'Restart=on-failure' '' \
+            '[Install]' 'WantedBy=default.target' > "${PKG}/usr/lib/systemd/user/hermes.service"
+          chmod 644 "${PKG}/usr/lib/systemd/user/hermes.service"
           mkdir -p "${PKG}/DEBIAN"
           printf 'Package: hermes\nVersion: %s\nArchitecture: %s\nMaintainer: Hermes <admin@tseknet.com>\nDescription: Cross-platform notification daemon (per-user gRPC + Wails UI)\n' "$VERSION" "$ARCH" > "${PKG}/DEBIAN/control"
-          printf '%s\n' '#!/bin/sh' 'set -e' 'pkill -f /usr/local/bin/hermes 2>/dev/null || true' 'for uid_dir in /run/user/*; do' '  uid=$(basename "$uid_dir")' '  DBUS_SESSION_BUS_ADDRESS="unix:path=$uid_dir/bus" sudo -u "#$uid" systemctl --user disable --now hermes.service 2>/dev/null || true' 'done' > "${PKG}/DEBIAN/prerm"
+          printf '%s\n' '#!/bin/sh' 'set -e' \
+            '/usr/local/bin/hermes stop 2>/dev/null || true' \
+            'for uid_dir in /run/user/*; do' \
+            '  uid=$(basename "$uid_dir")' \
+            '  DBUS_SESSION_BUS_ADDRESS="unix:path=$uid_dir/bus" sudo -u "#$uid" systemctl --user disable --now hermes.service 2>/dev/null || true' \
+            'done' > "${PKG}/DEBIAN/prerm"
           chmod 755 "${PKG}/DEBIAN/prerm"
-          printf '%s\n' '#!/bin/sh' 'set -e' 'if [ "$1" = "purge" ] || [ "$1" = "remove" ]; then' '  rm -f /etc/profile.d/hermes.sh /etc/profile.d/hermes-motd.sh' '  rm -f /usr/lib/systemd/user/hermes.service' '  for home_dir in /home/*; do' '    rm -f "$home_dir/.config/systemd/user/hermes.service" 2>/dev/null || true' '  done' 'fi' > "${PKG}/DEBIAN/postrm"
+          printf '%s\n' '#!/bin/sh' 'set -e' \
+            '/usr/local/bin/hermes install 2>/dev/null || true' > "${PKG}/DEBIAN/postinst"
+          chmod 755 "${PKG}/DEBIAN/postinst"
+          printf '%s\n' '#!/bin/sh' 'set -e' \
+            'if [ "$1" = "purge" ] || [ "$1" = "remove" ]; then' \
+            '  /usr/local/bin/hermes uninstall 2>/dev/null || true' \
+            '  rm -f /usr/lib/systemd/user/hermes.service' \
+            '  for home_dir in /home/*; do' \
+            '    rm -f "$home_dir/.config/systemd/user/hermes.service" 2>/dev/null || true' \
+            '  done' \
+            'fi' > "${PKG}/DEBIAN/postrm"
           chmod 755 "${PKG}/DEBIAN/postrm"
           dpkg-deb --root-owner-group -b "${PKG}" "hermes_${VERSION}.deb"
           cp "hermes_${VERSION}.deb" hermes.deb
