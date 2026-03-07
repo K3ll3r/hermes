@@ -40,25 +40,25 @@
     </StandardDirectory>
 
     <SetProperty Id="StopHermes" Before="StopHermes" Sequence="execute"
-      Value="[System64Folder]cmd.exe" />
-    <CustomAction Id="StopHermes" Property="StopHermes"
-      ExeCommand="/c taskkill /F /IM hermes.exe"
-      Execute="immediate" Return="ignore" />
+      Value="&quot;[System64Folder]taskkill.exe&quot; /F /IM hermes.exe" />
+    <CustomAction Id="StopHermes"
+      BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec"
+      Execute="deferred" Impersonate="no" Return="ignore" />
 
     <SetProperty Id="InstallMotdHook" Before="InstallMotdHook" Sequence="execute"
-      Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[HermesDir]install-motd-hook.ps1&quot;" />
+      Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[HermesDir]install-motd-hook.ps1&quot;" />
     <CustomAction Id="InstallMotdHook"
       BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec"
       Execute="deferred" Impersonate="no" Return="ignore" />
 
     <SetProperty Id="RemoveMotdHook" Before="RemoveMotdHook" Sequence="execute"
-      Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[HermesDir]remove-motd-hook.ps1&quot;" />
+      Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[HermesDir]remove-motd-hook.ps1&quot;" />
     <CustomAction Id="RemoveMotdHook"
       BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec"
       Execute="deferred" Impersonate="no" Return="ignore" />
 
     <InstallExecuteSequence>
-      <Custom Action="StopHermes" Before="InstallValidate" Condition="REMOVE=&quot;ALL&quot; OR UPGRADINGPRODUCTCODE" />
+      <Custom Action="StopHermes" After="InstallInitialize" Condition="REMOVE=&quot;ALL&quot; OR UPGRADINGPRODUCTCODE" />
       <Custom Action="InstallMotdHook" After="InstallFiles" Condition="NOT Installed OR UPGRADINGPRODUCTCODE" />
       <Custom Action="RemoveMotdHook" After="InstallFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
     </InstallExecuteSequence>

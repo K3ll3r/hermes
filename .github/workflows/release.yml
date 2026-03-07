@@ -52,7 +52,7 @@ jobs:
           BUILD_FLAGS="-platform ${{ matrix.goos }}/${{ matrix.goarch }}"
           BUILD_FLAGS="$BUILD_FLAGS -ldflags \"-s -w -X github.com/TsekNet/hermes/cmd.Version=${{ github.ref_name }} -X github.com/TsekNet/hermes/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            BUILD_FLAGS="$BUILD_FLAGS -windowsconsole"
+            :  # GUI subsystem — no console window on launch
           fi
           if [ "${{ matrix.goos }}" = "linux" ]; then
             BUILD_FLAGS="$BUILD_FLAGS -tags webkit2_41"
