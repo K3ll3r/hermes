@@ -355,7 +355,9 @@ func webviewDataPath(mode string) string {
 	if base == "" {
 		return ""
 	}
-	return filepath.Join(base, "hermes", "webview2", mode)
+	p := filepath.Join(base, "hermes", "webview2", mode)
+	os.MkdirAll(p, 0700)
+	return p
 }
 
 // runUI opens the Wails webview with the given config. On error it exits
