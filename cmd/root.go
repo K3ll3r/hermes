@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -351,6 +352,13 @@ func runUI(cfg *config.NotificationConfig) {
 
 	a := app.New(cfg)
 
+	// Use a separate WebView2 data directory so the local/demo UI doesn't
+	// conflict with the service daemon's WebView2 lock on the default path.
+	var wv2Path string
+	if d := os.Getenv("LOCALAPPDATA"); d != "" {
+		wv2Path = filepath.Join(d, "hermes", "webview2-local")
+	}
+
 	err := wails.Run(&options.App{
 		Title:         cfg.Title,
 		Width:         app.WindowWidth,
@@ -363,7 +371,10 @@ func runUI(cfg *config.NotificationConfig) {
 		OnStartup:     a.Startup,
 		OnShutdown:    a.Shutdown,
 		Bind:          []interface{}{a},
-		Windows: &wopts.Options{IsZoomControlEnabled: false},
+		Windows: &wopts.Options{
+			IsZoomControlEnabled: false,
+			WebviewUserDataPath:  wv2Path,
+		},
 	})
 	if err != nil {
 		deck.Errorf("wails: %v", err)
