@@ -61,27 +61,26 @@ func launchInUserSessions(exe string, args []string) {
 		return
 	}
 
-	cmdLine, err := buildCommandLine(exe, args)
-	if err != nil {
-		deck.Warningf("session launch: build command line: %v", err)
-		return
-	}
+	cmdLine := buildCommandLine(exe, args)
 
 	launched := make(map[string]bool)
 	for _, sid := range sessions {
-		username, err := resolveSessionUser(sid)
+		token, username, err := acquireSessionToken(sid)
 		if err != nil {
 			deck.Warningf("session launch: session %d: %v", sid, err)
 			continue
 		}
 		if username != "" && launched[username] {
+			token.Close()
 			deck.Infof("session launch: session %d: skipped (already launched for %s)", sid, username)
 			continue
 		}
-		if err := launchInSession(sid, exe, cmdLine); err != nil {
+		if err := launchWithToken(token, exe, cmdLine); err != nil {
+			token.Close()
 			deck.Warningf("session launch: session %d: %v", sid, err)
 			continue
 		}
+		token.Close()
 		if username != "" {
 			launched[username] = true
 		}
@@ -120,61 +119,39 @@ func enumerateActiveSessions() ([]uint32, error) {
 
 const tokenMinAccess = windows.TOKEN_QUERY | windows.TOKEN_DUPLICATE | windows.TOKEN_ASSIGN_PRIMARY
 
-// resolveSessionUser returns the username for a session without launching anything.
-func resolveSessionUser(sessionID uint32) (string, error) {
+// acquireSessionToken gets a primary token for the session and resolves the username.
+// Caller must call token.Close() when done.
+func acquireSessionToken(sessionID uint32) (windows.Token, string, error) {
 	var impToken windows.Handle
 	r1, _, err := procWTSQueryUserToken.Call(
 		uintptr(sessionID),
 		uintptr(unsafe.Pointer(&impToken)),
 	)
 	if r1 == 0 {
-		return "", fmt.Errorf("WTSQueryUserToken: %w", err)
+		return 0, "", fmt.Errorf("WTSQueryUserToken: %w", err)
 	}
 	defer windows.CloseHandle(impToken)
 
-	var tok windows.Token
+	var token windows.Token
 	if err := windows.DuplicateTokenEx(
-		windows.Token(impToken), windows.TOKEN_QUERY, nil,
-		securityImperson, tokenPrimary, &tok,
+		windows.Token(impToken), tokenMinAccess, nil,
+		securityImperson, tokenPrimary, &token,
 	); err != nil {
-		return "", fmt.Errorf("DuplicateTokenEx: %w", err)
+		return 0, "", fmt.Errorf("DuplicateTokenEx: %w", err)
 	}
-	defer tok.Close()
 
-	tu, err := tok.GetTokenUser()
+	tu, err := token.GetTokenUser()
 	if err != nil {
-		return "", fmt.Errorf("GetTokenUser: %w", err)
+		token.Close()
+		return 0, "", fmt.Errorf("GetTokenUser: %w", err)
 	}
 	username, _, _, _ := tu.User.Sid.LookupAccount("")
-	return username, nil
+	return token, username, nil
 }
 
-func launchInSession(sessionID uint32, exe, cmdLine string) error {
-	var impToken windows.Handle
-	r1, _, err := procWTSQueryUserToken.Call(
-		uintptr(sessionID),
-		uintptr(unsafe.Pointer(&impToken)),
-	)
-	if r1 == 0 {
-		return fmt.Errorf("WTSQueryUserToken: %w", err)
-	}
-	defer windows.CloseHandle(impToken)
-
-	var userToken windows.Token
-	if err := windows.DuplicateTokenEx(
-		windows.Token(impToken),
-		tokenMinAccess,
-		nil,
-		securityImperson,
-		tokenPrimary,
-		&userToken,
-	); err != nil {
-		return fmt.Errorf("DuplicateTokenEx: %w", err)
-	}
-	defer userToken.Close()
-
+func launchWithToken(userToken windows.Token, exe, cmdLine string) error {
 	var envBlock uintptr
-	r1, _, err = procCreateEnvBlock.Call(
+	r1, _, err := procCreateEnvBlock.Call(
 		uintptr(unsafe.Pointer(&envBlock)),
 		uintptr(userToken),
 		0,
@@ -216,13 +193,13 @@ func launchInSession(sessionID uint32, exe, cmdLine string) error {
 
 // buildCommandLine constructs a Windows command line string with proper quoting
 // per CommandLineToArgvW rules: backslashes before a closing quote must be doubled.
-func buildCommandLine(exe string, args []string) (string, error) {
+func buildCommandLine(exe string, args []string) string {
 	parts := make([]string, 0, 1+len(args))
 	parts = append(parts, quoteArg(exe))
 	for _, a := range args {
 		parts = append(parts, quoteArg(a))
 	}
-	return strings.Join(parts, " "), nil
+	return strings.Join(parts, " ")
 }
 
 func quoteArg(s string) string {
