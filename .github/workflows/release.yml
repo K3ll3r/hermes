@@ -184,12 +184,32 @@ jobs:
         working-directory: dist
         run: sha256sum * > checksums.txt
 
+      - name: Build changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | grep -A1 "^${GITHUB_REF_NAME}$" | tail -1)
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$GITHUB_REF_NAME" ]; then
+            RANGE="$GITHUB_REF_NAME"
+          else
+            RANGE="${PREV_TAG}..${GITHUB_REF_NAME}"
+          fi
+          {
+            echo "## What's Changed"
+            echo ""
+            git log --pretty=format:"- %s (\`%h\`)" "$RANGE" --
+            echo ""
+            echo ""
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${GITHUB_REF_NAME}"
+          } > /tmp/release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: /tmp/release-notes.md
           files: |
             dist/hermes.app.tar.gz
             dist/hermes_arm64.app.tar.gz
             dist/hermes.deb
             dist/hermes.msi
-          generate_release_notes: true
+            dist/hermes.pkg
+            dist/hermes_arm64.pkg
