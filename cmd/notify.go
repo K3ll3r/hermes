@@ -2,9 +2,13 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 
 	"github.com/TsekNet/hermes/internal/client"
+	"github.com/TsekNet/hermes/internal/config"
 	"github.com/TsekNet/hermes/internal/server"
 	"github.com/google/deck"
 	"github.com/spf13/cobra"
@@ -18,6 +22,10 @@ func notifyCmd() *cobra.Command {
 		Short: "Send a notification via the hermes service",
 		Long: `Sends a notification config to the running hermes service and blocks
 until the user responds or the notification times out.
+
+When run as SYSTEM (Windows) or root (macOS/Linux), hermes automatically
+broadcasts the notification to all active user sessions. No wrapper scripts
+or user-context switching is needed.
 
 Config can be a file path (JSON or YAML), inline JSON string, or piped via stdin.`,
 		Example: `  hermes notify '{"heading":"Restart","message":"Please restart."}'
@@ -43,6 +51,10 @@ func runNotify(_ *cobra.Command, args []string) error {
 	}
 	prepareConfig(cfg)
 
+	if isPrivileged() {
+		return broadcastNotify(cfg, args)
+	}
+
 	c, err := client.Dial(flagNotifyPort)
 	if err != nil {
 		if tryEnqueue(cfg, err) {
@@ -62,4 +74,59 @@ func runNotify(_ *cobra.Command, args []string) error {
 	}
 	printResultAndExit(result)
 	return nil
+}
+
+// broadcastNotify re-launches "hermes notify <args>" in every active user
+// session so each child runs in user context with access to the per-user
+// auth token and daemon. Reuses the same session launch machinery as
+// hermes install.
+//
+// When config came from stdin (args empty, flagConfig empty), cfg is
+// serialized to a temp file so children can read it.
+func broadcastNotify(cfg *config.NotificationConfig, args []string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve executable: %w", err)
+	}
+
+	notifyArgs := []string{"notify"}
+	if flagNotifyPort != server.DefaultPort {
+		notifyArgs = append(notifyArgs, "--port", strconv.Itoa(flagNotifyPort))
+	}
+
+	switch {
+	case flagConfig != "":
+		notifyArgs = append(notifyArgs, "--config", flagConfig)
+	case len(args) > 0:
+		notifyArgs = append(notifyArgs, args...)
+	default:
+		f, err := writeTempConfig(cfg)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(f)
+		notifyArgs = append(notifyArgs, "--config", f)
+	}
+
+	deck.Infof("notification: mode=broadcast (privileged), relaunching in user sessions")
+	launchInUserSessions(exe, notifyArgs)
+	return nil
+}
+
+func writeTempConfig(cfg *config.NotificationConfig) (string, error) {
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return "", fmt.Errorf("marshal config for broadcast: %w", err)
+	}
+	f, err := os.CreateTemp("", "hermes-broadcast-*.json")
+	if err != nil {
+		return "", fmt.Errorf("create temp config: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", fmt.Errorf("write temp config: %w", err)
+	}
+	f.Close()
+	return f.Name(), nil
 }

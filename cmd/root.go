@@ -126,9 +126,12 @@ func runRoot(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Mode 3: Config found → send to service.
+	// Mode 3: Config found → send to service (or broadcast if privileged).
 	if cfg != nil {
 		prepareConfig(cfg)
+		if isPrivileged() {
+			return broadcastNotify(cfg, args)
+		}
 		return sendToService(cfg)
 	}
 

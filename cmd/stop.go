@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TsekNet/hermes/internal/client"
 	"github.com/TsekNet/hermes/internal/server"
 	"github.com/google/deck"
 	"github.com/spf13/cobra"
@@ -20,8 +22,8 @@ func stopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the running hermes service daemon",
-		Long: `Finds the hermes serve process listening on the gRPC port and sends it
-a graceful shutdown signal (SIGTERM on Unix, taskkill on Windows).`,
+		Long: `Sends a graceful Shutdown RPC to the hermes daemon. Falls back to
+process-level signals if the gRPC call fails.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return runStop(port)
 		},
@@ -31,6 +33,14 @@ a graceful shutdown signal (SIGTERM on Unix, taskkill on Windows).`,
 }
 
 func runStop(port int) error {
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("invalid port: %d (must be 1-65535)", port)
+	}
+
+	if stopped := tryGracefulShutdown(port); stopped {
+		return nil
+	}
+
 	pid, err := findListenerPID(port)
 	if err != nil {
 		return fmt.Errorf("no hermes daemon found on port %d: %w", port, err)
@@ -47,6 +57,26 @@ func runStop(port int) error {
 		return nil
 	}
 	return fmt.Errorf("daemon pid %d did not exit within 5s", pid)
+}
+
+func tryGracefulShutdown(port int) bool {
+	c, err := client.Dial(port)
+	if err != nil {
+		return false
+	}
+	defer c.Close()
+
+	deck.Infof("sending Shutdown RPC to port %d", port)
+	if err := c.Shutdown(context.Background()); err != nil {
+		deck.Warningf("Shutdown RPC failed: %v, falling back to process kill", err)
+		return false
+	}
+	if waitForExit(port, 5*time.Second) {
+		fmt.Fprintf(os.Stderr, "hermes daemon stopped (graceful shutdown)\n")
+		return true
+	}
+	deck.Warningf("daemon did not exit after Shutdown RPC, falling back to process kill")
+	return false
 }
 
 func waitForExit(port int, timeout time.Duration) bool {

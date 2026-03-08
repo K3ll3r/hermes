@@ -355,7 +355,7 @@ The second notification is held in `waiting_on_dependency` state until the first
 | Command | Description |
 |---------|-------------|
 | `hermes serve` | Start the gRPC service daemon |
-| `hermes notify [config]` | Send notification to service (blocks for result) |
+| `hermes notify [config]` | Send notification to service. Auto-broadcasts to all user sessions when run as SYSTEM/root. See **[Broadcast](broadcast.md)**. |
 | `hermes list` | List active notifications |
 | `hermes cancel <id>` | Cancel an active notification |
 | `hermes inbox` | View notification history (opens inbox UI) |

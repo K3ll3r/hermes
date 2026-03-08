@@ -40,6 +40,9 @@ type Store struct {
 
 // Open opens (or creates) the bolt database at the default platform path.
 // Pass "" for path to use the default.
+//
+// On Windows, MSI upgrades can briefly hold the DB lock while the old daemon
+// exits. Open retries with exponential backoff (1s, 2s, 4s) before giving up.
 func Open(path string) (*Store, error) {
 	if path == "" {
 		path = defaultPath()
@@ -47,10 +50,25 @@ func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, fmt.Errorf("create store dir: %w", err)
 	}
-	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
-	if err != nil {
-		return nil, fmt.Errorf("open bolt db: %w", err)
+
+	var db *bolt.DB
+	backoff := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
+	var lastErr error
+	for attempt := range len(backoff) + 1 {
+		var err error
+		db, err = bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
+		if err == nil {
+			break
+		}
+		lastErr = err
+		if attempt < len(backoff) {
+			time.Sleep(backoff[attempt])
+		}
 	}
+	if db == nil {
+		return nil, fmt.Errorf("open bolt db after retries: %w", lastErr)
+	}
+
 	if err := db.Update(func(tx *bolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists(bucketName); err != nil {
 			return err

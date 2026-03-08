@@ -53,9 +53,6 @@ func runInstall() error {
 			return nil
 		}
 		args := []string{"serve"}
-		if runtime.GOOS == "windows" {
-			args = append(args, "--startup-delay", "5")
-		}
 		deck.Infof("install: launching hermes serve in active user sessions")
 		launchInUserSessions(exe, args)
 	}

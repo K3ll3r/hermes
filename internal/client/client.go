@@ -184,3 +184,11 @@ func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.svc.List(ctx, &pb.ListRequest{})
 	return err
 }
+
+// Shutdown requests a graceful daemon shutdown via gRPC.
+func (c *Client) Shutdown(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_, err := c.svc.Shutdown(ctx, &pb.ShutdownRequest{})
+	return err
+}

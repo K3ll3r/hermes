@@ -151,3 +151,9 @@ func (s *Server) List(_ context.Context, _ *pb.ListRequest) (*pb.ListResponse, e
 	}
 	return &pb.ListResponse{Notifications: out}, nil
 }
+
+func (s *Server) Shutdown(_ context.Context, _ *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
+	deck.Infof("gRPC: Shutdown requested, initiating graceful stop")
+	go s.grpc.GracefulStop()
+	return &pb.ShutdownResponse{}, nil
+}

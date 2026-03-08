@@ -285,6 +285,7 @@ RPCs:
 | `Cancel` | CLI → Service | Cancel an active notification |
 | `List` | CLI → Service | List active notifications |
 | `ListHistory` | CLI → Service | Retrieve completed notification history |
+| `Shutdown` | CLI → Service | Graceful daemon shutdown (used by `hermes stop`) |
 
 ---
 
