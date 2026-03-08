@@ -89,7 +89,11 @@ func runInboxUI(port int, dbPath string) error {
 		OnStartup:     inboxApp.Startup,
 		OnShutdown:    inboxApp.Shutdown,
 		Bind:          []interface{}{inboxApp},
-		Windows:       &wopts.Options{IsZoomControlEnabled: false, DisableWindowIcon: false},
+		Windows: &wopts.Options{
+			IsZoomControlEnabled: false,
+			DisableWindowIcon:    false,
+			WebviewUserDataPath:  webviewDataPath("inbox"),
+		},
 	})
 }
 
