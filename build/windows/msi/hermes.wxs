@@ -10,6 +10,12 @@
 
     <MajorUpgrade AllowDowngrades="yes" />
 
+    <!-- Disable Restart Manager: hermes serve is launched via CreateProcessAsUser
+         from a SYSTEM context, which causes RM SID mismatch errors. The StopHermes
+         custom action handles graceful shutdown instead. -->
+    <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable" />
+    <Property Id="MSIRMSHUTDOWN" Value="0" />
+
     <MediaTemplate EmbedCab="yes" />
 
     <Icon Id="HermesIcon" SourceFile="$(var.StagingDir)/hermes.exe" />
