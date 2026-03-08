@@ -77,46 +77,11 @@ jobs:
           mkdir -p dist
           if [ "${{ matrix.goos }}" = "darwin" ]; then
             cd build/bin
-            PKG_ROOT="../../pkgroot"
-            mkdir -p "$PKG_ROOT/usr/local/bin" "$PKG_ROOT/Library/LaunchAgents"
-            cp hermes.app/Contents/MacOS/hermes "$PKG_ROOT/usr/local/bin/"
-            chmod 755 "$PKG_ROOT/usr/local/bin/hermes"
-            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
-              '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-              '<plist version="1.0">' '<dict>' \
-              '  <key>Label</key><string>com.tseknet.hermes</string>' \
-              '  <key>ProgramArguments</key>' \
-              '  <array><string>/usr/local/bin/hermes</string><string>serve</string></array>' \
-              '  <key>RunAtLoad</key><true/>' \
-              '  <key>KeepAlive</key><true/>' \
-              '</dict>' '</plist>' > "$PKG_ROOT/Library/LaunchAgents/com.tseknet.hermes.plist"
-            chmod 644 "$PKG_ROOT/Library/LaunchAgents/com.tseknet.hermes.plist"
-            printf '%s\n' '#!/bin/sh' \
-              'set -e' \
-              'launchctl bootout gui/$(id -u) /Library/LaunchAgents/com.tseknet.hermes.plist 2>/dev/null || true' \
-              'rm -f /usr/local/bin/hermes /usr/local/bin/hermes-uninstall' \
-              'rm -f /Library/LaunchAgents/com.tseknet.hermes.plist' \
-              '/usr/local/bin/hermes uninstall 2>/dev/null || true' \
-              'pkgutil --forget com.tseknet.hermes 2>/dev/null || true' \
-              'echo "Hermes uninstalled."' > "$PKG_ROOT/usr/local/bin/hermes-uninstall"
-            chmod 755 "$PKG_ROOT/usr/local/bin/hermes-uninstall"
-            mkdir -p ../../pkgscripts
-            printf '%s\n' '#!/bin/sh' \
-              '/usr/local/bin/hermes stop 2>/dev/null || true' \
-              'exit 0' > ../../pkgscripts/preinstall
-            chmod 755 ../../pkgscripts/preinstall
-            printf '%s\n' '#!/bin/sh' \
-              '/usr/local/bin/hermes install 2>/dev/null || true' \
-              'exit 0' > ../../pkgscripts/postinstall
-            chmod 755 ../../pkgscripts/postinstall
             if [ "${{ matrix.goarch }}" = "amd64" ]; then
-              pkgbuild --identifier com.tseknet.hermes --root "$PKG_ROOT" --install-location / --scripts ../../pkgscripts ../../dist/hermes.pkg
               tar czf ../../dist/hermes.app.tar.gz hermes.app
             else
-              pkgbuild --identifier com.tseknet.hermes --root "$PKG_ROOT" --install-location / --scripts ../../pkgscripts ../../dist/hermes_${{ matrix.goarch }}.pkg
               tar czf ../../dist/hermes_${{ matrix.goarch }}.app.tar.gz hermes.app
             fi
-            rm -rf "$PKG_ROOT" ../../pkgscripts
           elif [ "${{ matrix.goos }}" = "windows" ]; then
             :  # hermes.msi already in dist from Build MSI step
           elif [ "${{ matrix.goos }}" = "linux" ]; then
@@ -211,5 +176,3 @@ jobs:
             dist/hermes_arm64.app.tar.gz
             dist/hermes.deb
             dist/hermes.msi
-            dist/hermes.pkg
-            dist/hermes_arm64.pkg
