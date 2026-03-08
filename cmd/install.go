@@ -28,14 +28,30 @@ after files are placed on disk. Safe to run multiple times.`,
 }
 
 func runInstall() error {
+	var err error
 	switch runtime.GOOS {
 	case "windows":
-		return installWindows()
+		err = installWindows()
 	case "darwin":
-		return installDarwin()
+		err = installDarwin()
 	default:
-		return installLinux()
+		err = installLinux()
 	}
+	if err != nil {
+		return err
+	}
+
+	if isPrivileged() {
+		exe, exeErr := os.Executable()
+		if exeErr != nil {
+			deck.Warningf("install: cannot resolve executable path: %v", exeErr)
+			return nil
+		}
+		deck.Infof("install: launching hermes serve in active user sessions")
+		launchInUserSessions(exe, []string{"serve"})
+	}
+
+	return nil
 }
 
 func installWindows() error {

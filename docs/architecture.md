@@ -207,6 +207,10 @@ hermes/
 │   ├── list.go                    List active notifications
 │   ├── cancel.go                  Cancel a notification
 │   ├── inbox.go                   View notification history (UI or JSON)
+│   ├── install.go                 MOTD hook setup (called by package installers)
+│   ├── uninstall.go               MOTD hook cleanup
+│   ├── sessionlaunch_windows.go   Win32 CreateProcessAsUser for per-user daemon launch
+│   ├── sessionlaunch_unix.go      Unix SysProcAttr.Credential for per-user daemon launch
 │   ├── demo.go                    Demo subcommand and config
 │   └── version.go                 Version/build-date vars and subcommand
 │
@@ -286,7 +290,7 @@ RPCs:
 
 ## Deployment {#deployment}
 
-The service daemon runs **per-user** — each user who needs notifications should have `hermes serve` started at login. This is a deployment concern, not built into hermes itself.
+The service daemon runs **per-user** — each user who needs notifications should have `hermes serve` running in their desktop session. When `hermes install` runs elevated (e.g. from a package postinstall script), it launches the daemon in all active user sessions immediately via native OS APIs. The HKLM Run key (Windows), LaunchAgent (macOS), and systemd user unit (Linux) handle autostart on subsequent logins. See **[Platforms — Deployment](platforms.md#deployment)** for the full matrix.
 
 ### Windows
 
