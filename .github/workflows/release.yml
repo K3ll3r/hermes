@@ -58,7 +58,9 @@ jobs:
 
       - name: Install WiX (Windows)
         if: matrix.goos == 'windows'
-        run: dotnet tool install --global wix --version 6.0.2
+        run: |
+          dotnet tool install --global wix --version 6.0.2
+          wix extension add -g WixToolset.Util.wixext
 
       - name: Build MSI (Windows)
         if: matrix.goos == 'windows'
