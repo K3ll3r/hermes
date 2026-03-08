@@ -136,25 +136,11 @@ func runRoot(_ *cobra.Command, args []string) error {
 	return runDemo()
 }
 
-// runDemo sends a demo notification to the service. If the service is
-// unreachable, falls back to local UI. This path also supports Wails
-// binding generation (which runs the binary with no args).
+// runDemo renders a demo notification locally. Always uses local mode so
+// the UI appears reliably regardless of how the binary was launched
+// (double-click, terminal, service context). Also enables Wails binding
+// generation (which runs the binary with no args).
 func runDemo() error {
-	c, err := client.DialDefault()
-	if err == nil {
-		defer c.Close()
-		if err := c.Ping(context.Background()); err == nil {
-			deck.Info("service reachable, sending demo via gRPC")
-			result, err := c.Notify(context.Background(), demoConfig())
-			if err != nil {
-				return fmt.Errorf("demo via service: %w", err)
-			}
-			printResultAndExit(result)
-		}
-	}
-
-	// Service not running — local fallback (also enables Wails binding gen).
-	deck.Info("service not reachable, showing demo locally")
 	cfg := demoConfig()
 	waitForDND(cfg)
 	runUI(cfg)
