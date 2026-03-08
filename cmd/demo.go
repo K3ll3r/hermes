@@ -24,6 +24,7 @@ func demoConfig() *config.NotificationConfig {
 		TimeoutSeconds: 60,
 		TimeoutValue:   "timeout",
 		EscValue:       "dismiss",
+		DND:            config.DNDIgnore,
 		HelpURL:        "https://github.com/TsekNet/hermes",
 		Buttons: []config.Button{
 			{

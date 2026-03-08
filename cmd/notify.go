@@ -52,7 +52,7 @@ func runNotify(_ *cobra.Command, args []string) error {
 	}
 	defer c.Close()
 
-	deck.Infof("sending notification to service on port %d", flagNotifyPort)
+	deck.Infof("notification: mode=notify heading=%q port=%d buttons=%d", cfg.Heading, flagNotifyPort, len(cfg.Buttons))
 	result, err := c.Notify(context.Background(), cfg)
 	if err != nil {
 		if tryEnqueue(cfg, err) {

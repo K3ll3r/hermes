@@ -20,9 +20,9 @@ The `hermes serve` daemon runs **per-user** in the desktop session. Run the inst
 
 | Platform | Install | Autostart |
 |----------|---------|-----------|
-| Windows | **hermes.msi** | HKLM Run key at logon. |
-| Linux | `sudo dpkg -i hermes.deb` | systemd user unit + profile.d; starts on next login. |
-| macOS | **hermes.pkg** / **hermes_arm64.pkg** | LaunchAgent in `/Library/LaunchAgents`; profile.d + zprofile snippet via postinstall. |
+| Windows | **hermes.msi** | HKLM Run key at logon. `hermes install` also launches the daemon immediately in all active user sessions via Win32 `CreateProcessAsUser`. |
+| Linux | `sudo dpkg -i hermes.deb` | systemd user unit + profile.d. `hermes install` also launches the daemon immediately for all logged-in users via `SysProcAttr.Credential`. |
+| macOS | **hermes.pkg** / **hermes_arm64.pkg** | LaunchAgent in `/Library/LaunchAgents`; profile.d + zprofile snippet via postinstall. `hermes install` also launches the daemon immediately for all active users. |
 
 **Silent / MDM install**
 

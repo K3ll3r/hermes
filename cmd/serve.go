@@ -20,8 +20,9 @@ import (
 )
 
 var (
-	flagPort int
-	flagDB   string
+	flagPort         int
+	flagDB           string
+	flagStartupDelay int
 )
 
 func serveCmd() *cobra.Command {
@@ -40,10 +41,17 @@ service restarts.`,
 	}
 	cmd.Flags().IntVar(&flagPort, "port", server.DefaultPort, "gRPC listen port")
 	cmd.Flags().StringVar(&flagDB, "db", "", "bolt database path (default: platform-specific)")
+	cmd.Flags().IntVar(&flagStartupDelay, "startup-delay", 0, "seconds to wait before starting (used by installer)")
+	cmd.Flags().MarkHidden("startup-delay")
 	return cmd
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
+	if flagStartupDelay > 0 {
+		deck.Infof("startup delay: waiting %ds for installer to exit", flagStartupDelay)
+		time.Sleep(time.Duration(flagStartupDelay) * time.Second)
+	}
+
 	s, err := store.Open(flagDB)
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
@@ -111,7 +119,7 @@ func drainQueue(mgr *manager.Manager, s *store.Store) {
 	}
 
 	records = sortByDependencies(records)
-	deck.Infof("draining %d queued notification(s) (dependency + priority ordered)", len(records))
+	deck.Infof("notification: draining %d queued item(s)", len(records))
 	locale := config.DetectLocale()
 	now := time.Now()
 
@@ -119,13 +127,13 @@ func drainQueue(mgr *manager.Manager, s *store.Store) {
 		r.Config.ApplyLocale(locale)
 		r.Config.ApplyDefaults()
 		if err := r.Config.Validate(); err != nil {
-			deck.Warningf("drain: invalid queued notification %s, discarding: %v", r.ID, err)
+			deck.Warningf("notification: drain id=%s result=invalid heading=%q error=%q", r.ID, r.Config.Heading, err)
 			s.DeleteQueued(r.ID)
 			continue
 		}
 		if now.After(r.ExpiresAt) {
-			deck.Infof("drain: expired queued notification %s (queued %s, expired %s)",
-				r.ID, r.QueuedAt.Format(time.DateOnly), r.ExpiresAt.Format(time.DateOnly))
+			deck.Infof("notification: drain id=%s result=expired heading=%q queued=%s expired=%s",
+				r.ID, r.Config.Heading, r.QueuedAt.Format(time.DateOnly), r.ExpiresAt.Format(time.DateOnly))
 			s.SaveHistory(&store.HistoryRecord{
 				ID:            r.ID,
 				Config:        r.Config,
@@ -137,16 +145,13 @@ func drainQueue(mgr *manager.Manager, s *store.Store) {
 			continue
 		}
 
-		// Delete from queue before submit to prevent double-delivery
-		// if the daemon crashes mid-drain. At-most-once > at-least-once
-		// for user-facing notifications.
+		// Delete before submit: at-most-once > at-least-once for user-facing notifications.
 		s.DeleteQueued(r.ID)
 
 		id, resultCh := mgr.Submit(r.Config)
 		if id == "" {
-			// Rejected (duplicate ID from restore, or at capacity).
 			<-resultCh
-			deck.Warningf("drain: queued notification %s rejected by manager, skipping", r.ID)
+			deck.Warningf("notification: drain id=%s result=rejected heading=%q", r.ID, r.Config.Heading)
 			s.SaveHistory(&store.HistoryRecord{
 				ID:            r.ID,
 				Config:        r.Config,
@@ -157,19 +162,16 @@ func drainQueue(mgr *manager.Manager, s *store.Store) {
 			continue
 		}
 
-		deck.Infof("drain: submitted queued notification %s (heading=%q, priority=%d, queued %s)",
-			id, r.Config.Heading, r.Priority, r.QueuedAt.Format(time.DateOnly))
-
 		result := <-resultCh
-		deck.Infof("drain: queued notification %s completed with %q (exit %d)",
-			id, result.Value, result.ExitCode)
+		deck.Infof("notification: drain id=%s result=%q heading=%q priority=%d exit=%d queued=%s",
+			id, result.Value, r.Config.Heading, r.Priority, result.ExitCode, r.QueuedAt.Format(time.DateOnly))
 
 		if result.ExitCode != exitcodes.Deferred {
 			time.Sleep(drainDelay)
 		}
 	}
 
-	deck.Infof("queue drain complete")
+	deck.Infof("notification: drain complete")
 }
 
 // sortByDependencies reorders queue records so that if A depends on B
@@ -209,14 +211,14 @@ func sortByDependencies(records []*store.QueueRecord) []*store.QueueRecord {
 func reshowNotification(n *manager.Notification) {
 	selfPath, err := os.Executable()
 	if err != nil {
-		deck.Errorf("cannot determine own path: %v", err)
+		deck.Errorf("notification: reshow id=%s error=%q", n.ID, err)
 		return
 	}
 
-	deck.Infof("re-show %s: launching UI subprocess", n.ID)
 	args := []string{"--notification-id", n.ID, "--service-port", fmt.Sprintf("%d", flagPort)}
-
 	if err := launchSubprocess(selfPath, args); err != nil {
-		deck.Errorf("re-show %s: launch failed: %v", n.ID, err)
+		deck.Errorf("notification: reshow id=%s error=%q", n.ID, err)
+		return
 	}
+	deck.Infof("notification: reshow id=%s heading=%q", n.ID, n.Config.Heading)
 }

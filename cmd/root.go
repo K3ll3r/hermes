@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -120,7 +121,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 		if err := waitForDND(cfg); err != nil {
 			return err
 		}
-		deck.Infof("local mode: heading=%q buttons=%d", cfg.Heading, len(cfg.Buttons))
+		deck.Infof("notification: mode=local heading=%q buttons=%d dnd=%s", cfg.Heading, len(cfg.Buttons), cfg.DND)
 		runUI(cfg)
 		return nil
 	}
@@ -142,6 +143,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 func runDemo() error {
 	cfg := demoConfig()
 	waitForDND(cfg)
+	deck.Infof("notification: mode=demo heading=%q timeout=%ds", cfg.Heading, cfg.TimeoutSeconds)
 	runUI(cfg)
 	return nil
 }
@@ -158,6 +160,7 @@ func sendToService(cfg *config.NotificationConfig) error {
 	}
 	defer c.Close()
 
+	deck.Infof("notification: mode=service heading=%q buttons=%d dnd=%s", cfg.Heading, len(cfg.Buttons), cfg.DND)
 	result, err := c.Notify(context.Background(), cfg)
 	if err != nil {
 		if tryEnqueue(cfg, err) {
@@ -175,14 +178,14 @@ func sendToService(cfg *config.NotificationConfig) error {
 // If Open succeeds, the daemon is down and we persist for later delivery.
 func tryEnqueue(cfg *config.NotificationConfig, originalErr error) bool {
 	if err := cfg.Validate(); err != nil {
-		deck.Infof("queue fallback skipped (invalid config): %v", err)
+		deck.Warningf("notification: queue fallback skipped, invalid config: %v", err)
 		return false
 	}
 	if err := store.EnqueueOffline("", cfg, store.DefaultQueueTTL); err != nil {
-		deck.Infof("queue fallback failed (service may be running): %v", err)
+		deck.Infof("notification: queue fallback failed (service may hold DB lock): %v", err)
 		return false
 	}
-	deck.Infof("service unavailable (%v), notification queued for next startup", originalErr)
+	deck.Infof("notification: queued heading=%q reason=%q", cfg.Heading, originalErr)
 	fmt.Print("queued")
 	os.Stdout.Sync()
 	os.Exit(int(exitcodes.Queued))
@@ -193,9 +196,10 @@ func tryEnqueue(cfg *config.NotificationConfig, originalErr error) bool {
 // the appropriate code. Shared by sendToService and runNotify.
 func printResultAndExit(r *client.NotifyResult) {
 	if r.Error != "" {
-		deck.Errorf("service: %s", r.Error)
+		deck.Errorf("notification: result=error error=%q exit=%d", r.Error, r.ExitCode)
 		os.Exit(int(r.ExitCode))
 	}
+	deck.Infof("notification: result=%q exit=%d", r.Value, r.ExitCode)
 	fmt.Print(r.Value)
 	os.Stdout.Sync()
 	os.Exit(int(r.ExitCode))
@@ -222,6 +226,7 @@ func runServiceUI(notifID string, port int) error {
 		cfg.Buttons = filterDeferButtons(cfg.Buttons)
 	}
 
+	deck.Infof("notification: mode=service-ui id=%s heading=%q defer_allowed=%v", notifID, cfg.Heading, deferAllowed)
 	a := app.NewWithGRPC(cfg, c, notifID, deferAllowed)
 
 	err = wails.Run(&options.App{
@@ -236,7 +241,7 @@ func runServiceUI(notifID string, port int) error {
 		OnStartup:     a.Startup,
 		OnShutdown:    a.Shutdown,
 		Bind:          []interface{}{a},
-		Windows:       &wopts.Options{IsZoomControlEnabled: false},
+		Windows: &wopts.Options{IsZoomControlEnabled: false},
 	})
 	if err != nil {
 		deck.Errorf("wails: %v", err)
@@ -324,7 +329,7 @@ func waitForDND(cfg *config.NotificationConfig) error {
 		return nil
 	case config.DNDSkip:
 		if dnd.Active() {
-			deck.Infof("DND active, skipping notification (dnd=skip)")
+			deck.Infof("notification: dnd=skip, suppressed heading=%q", cfg.Heading)
 			fmt.Print("dnd_active")
 			os.Stdout.Sync()
 			os.Exit(int(exitcodes.OK))
@@ -332,7 +337,7 @@ func waitForDND(cfg *config.NotificationConfig) error {
 		return nil
 	default: // "respect"
 		for dnd.Active() {
-			deck.Infof("DND active, waiting 60s to show notification (dnd=respect)")
+			deck.Infof("notification: dnd=respect, waiting 60s heading=%q", cfg.Heading)
 			time.Sleep(60 * time.Second)
 		}
 		return nil
@@ -351,6 +356,8 @@ func runUI(cfg *config.NotificationConfig) {
 
 	a := app.New(cfg)
 
+	wv2Path := webview2DataPath()
+
 	err := wails.Run(&options.App{
 		Title:         cfg.Title,
 		Width:         app.WindowWidth,
@@ -363,7 +370,10 @@ func runUI(cfg *config.NotificationConfig) {
 		OnStartup:     a.Startup,
 		OnShutdown:    a.Shutdown,
 		Bind:          []interface{}{a},
-		Windows:       &wopts.Options{IsZoomControlEnabled: false},
+		Windows: &wopts.Options{
+			IsZoomControlEnabled: false,
+			WebviewUserDataPath:  wv2Path,
+		},
 	})
 	if err != nil {
 		deck.Errorf("wails: %v", err)
@@ -371,6 +381,20 @@ func runUI(cfg *config.NotificationConfig) {
 	}
 
 	respond(a.Result)
+}
+
+// webview2DataPath returns a dedicated WebView2 user data directory for
+// local/demo mode so it doesn't conflict with the service daemon's lock on
+// the default path. Creates the directory if it doesn't exist.
+// Returns "" on non-Windows (Wails uses a sensible default).
+func webview2DataPath() string {
+	d := os.Getenv("LOCALAPPDATA")
+	if d == "" {
+		return ""
+	}
+	p := filepath.Join(d, "hermes", "webview2-local")
+	os.MkdirAll(p, 0700)
+	return p
 }
 
 // prepareConfig applies defaults and locale resolution to a config.
@@ -388,12 +412,13 @@ func prepareConfig(cfg *config.NotificationConfig) {
 // distinguish "user clicked restart" (exit 0) from "countdown expired" (exit 202).
 func respond(value string) {
 	if value == "" {
-		// No interaction (dismissed or binding gen). Empty stdout signals "dismissed"
-		// to callers. Exit 0 so Wails binding generation succeeds in CI.
+		deck.Infof("notification: result=dismissed exit=0")
 		os.Exit(0)
 	}
+	code := exitcodes.ForValue(value)
 	clean := strings.TrimPrefix(value, "timeout:")
+	deck.Infof("notification: result=%q exit=%d", clean, code)
 	fmt.Print(clean)
 	os.Stdout.Sync()
-	os.Exit(int(exitcodes.ForValue(value)))
+	os.Exit(int(code))
 }
