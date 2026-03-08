@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -237,10 +236,7 @@ func runServiceUI(notifID string, port int) error {
 		OnStartup:     a.Startup,
 		OnShutdown:    a.Shutdown,
 		Bind:          []interface{}{a},
-		Windows: &wopts.Options{
-			IsZoomControlEnabled: false,
-			WebviewUserDataPath:  webviewDataPath("service"),
-		},
+		Windows: &wopts.Options{IsZoomControlEnabled: false},
 	})
 	if err != nil {
 		deck.Errorf("wails: %v", err)
@@ -343,23 +339,6 @@ func waitForDND(cfg *config.NotificationConfig) error {
 	}
 }
 
-// webviewDataPath returns a per-mode WebView2 user data directory under
-// %LOCALAPPDATA%/hermes/webview2/<mode>. Each mode (service, local, inbox)
-// needs its own directory because WebView2 locks the user data folder,
-// preventing concurrent use from different processes.
-func webviewDataPath(mode string) string {
-	base := os.Getenv("LOCALAPPDATA")
-	if base == "" {
-		base = os.Getenv("HOME")
-	}
-	if base == "" {
-		return ""
-	}
-	p := filepath.Join(base, "hermes", "webview2", mode)
-	os.MkdirAll(p, 0700)
-	return p
-}
-
 // runUI opens the Wails webview with the given config. On error it exits
 // with exitError; on success it prints the user's response to stdout.
 func runUI(cfg *config.NotificationConfig) {
@@ -384,10 +363,7 @@ func runUI(cfg *config.NotificationConfig) {
 		OnStartup:     a.Startup,
 		OnShutdown:    a.Shutdown,
 		Bind:          []interface{}{a},
-		Windows: &wopts.Options{
-			IsZoomControlEnabled: false,
-			WebviewUserDataPath:  webviewDataPath("local"),
-		},
+		Windows: &wopts.Options{IsZoomControlEnabled: false},
 	})
 	if err != nil {
 		deck.Errorf("wails: %v", err)
