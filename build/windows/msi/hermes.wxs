@@ -46,16 +46,10 @@
     <CustomAction Id="UninstallHook" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
       DllEntry="WixQuietExec" Execute="deferred" Impersonate="no" Return="ignore" />
 
-    <!-- Immediate fire-and-forget: FileRef EXE action (only type supporting asyncNoWait).
-         hermes.exe is a GUI-subsystem binary so no console window flashes. -->
-    <CustomAction Id="StartDaemon" FileRef="HermesExeFile"
-      ExeCommand="serve" Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
-
     <InstallExecuteSequence>
       <Custom Action="StopHermes" After="InstallInitialize" Condition="REMOVE=&quot;ALL&quot; OR UPGRADINGPRODUCTCODE" />
       <Custom Action="InstallHook" After="InstallFiles" Condition="NOT Installed OR UPGRADINGPRODUCTCODE" />
       <Custom Action="UninstallHook" After="InstallFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
-      <Custom Action="StartDaemon" After="InstallFinalize" Condition="NOT REMOVE" />
     </InstallExecuteSequence>
 
     <Feature Id="ProductFeature" Title="Hermes" Level="1">
