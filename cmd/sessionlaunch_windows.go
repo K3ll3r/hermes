@@ -21,11 +21,12 @@ var (
 )
 
 const (
-	wtsActive        = 0
-	tokenPrimary     = 1
-	securityImperson = 2
-	createUnicodeEnv = 0x00000400
-	createNoWindow   = 0x08000000
+	wtsActive            = 0
+	tokenPrimary         = 1
+	securityImperson     = 2
+	createUnicodeEnv     = 0x00000400
+	createNoWindow       = 0x08000000
+	createBreakawayJob   = 0x01000000
 )
 
 type wtsSessionInfo struct {
@@ -177,7 +178,7 @@ func launchInSession(sessionID uint32, exe, cmdLine string) (string, error) {
 		nil,
 		nil,
 		false,
-		createUnicodeEnv|createNoWindow,
+		createUnicodeEnv|createNoWindow|createBreakawayJob,
 		(*uint16)(unsafe.Pointer(envBlock)),
 		nil,
 		startupInfo,

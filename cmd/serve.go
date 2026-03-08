@@ -20,8 +20,9 @@ import (
 )
 
 var (
-	flagPort int
-	flagDB   string
+	flagPort         int
+	flagDB           string
+	flagStartupDelay int
 )
 
 func serveCmd() *cobra.Command {
@@ -40,10 +41,17 @@ service restarts.`,
 	}
 	cmd.Flags().IntVar(&flagPort, "port", server.DefaultPort, "gRPC listen port")
 	cmd.Flags().StringVar(&flagDB, "db", "", "bolt database path (default: platform-specific)")
+	cmd.Flags().IntVar(&flagStartupDelay, "startup-delay", 0, "seconds to wait before starting (used by installer)")
+	cmd.Flags().MarkHidden("startup-delay")
 	return cmd
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
+	if flagStartupDelay > 0 {
+		deck.Infof("startup delay: waiting %ds for installer to exit", flagStartupDelay)
+		time.Sleep(time.Duration(flagStartupDelay) * time.Second)
+	}
+
 	s, err := store.Open(flagDB)
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)

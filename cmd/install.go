@@ -47,8 +47,12 @@ func runInstall() error {
 			deck.Warningf("install: cannot resolve executable path: %v", exeErr)
 			return nil
 		}
+		args := []string{"serve"}
+		if runtime.GOOS == "windows" {
+			args = append(args, "--startup-delay", "5")
+		}
 		deck.Infof("install: launching hermes serve in active user sessions")
-		launchInUserSessions(exe, []string{"serve"})
+		launchInUserSessions(exe, args)
 	}
 
 	return nil
