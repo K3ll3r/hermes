@@ -30,3 +30,70 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  installer-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Linux deps
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build binary
+        run: |
+          wails build -skipbindings -platform linux/amd64 -tags webkit2_41 \
+            -ldflags "-s -w -X github.com/TsekNet/hermes/cmd.Version=0.0.0-ci"
+
+      - name: Build .deb
+        run: |
+          VERSION=0.0.0
+          PKG="hermes_${VERSION}"
+          mkdir -p "${PKG}/usr/local/bin" "${PKG}/usr/lib/systemd/user" "${PKG}/DEBIAN"
+          cp build/bin/hermes "${PKG}/usr/local/bin/"
+          chmod 755 "${PKG}/usr/local/bin/hermes"
+          printf '%s\n' '[Unit]' 'Description=Hermes notification service' '' \
+            '[Service]' 'ExecStart=/usr/local/bin/hermes serve' 'Restart=on-failure' '' \
+            '[Install]' 'WantedBy=default.target' > "${PKG}/usr/lib/systemd/user/hermes.service"
+          chmod 644 "${PKG}/usr/lib/systemd/user/hermes.service"
+          printf 'Package: hermes\nVersion: %s\nArchitecture: amd64\nMaintainer: Hermes <admin@tseknet.com>\nDescription: Cross-platform notification daemon\n' "$VERSION" > "${PKG}/DEBIAN/control"
+          printf '%s\n' '#!/bin/sh' 'set -e' \
+            '/usr/local/bin/hermes stop 2>/dev/null || true' > "${PKG}/DEBIAN/prerm"
+          chmod 755 "${PKG}/DEBIAN/prerm"
+          printf '%s\n' '#!/bin/sh' 'set -e' \
+            '/usr/local/bin/hermes install 2>/dev/null || true' > "${PKG}/DEBIAN/postinst"
+          chmod 755 "${PKG}/DEBIAN/postinst"
+          printf '%s\n' '#!/bin/sh' 'set -e' \
+            'if [ "$1" = "purge" ] || [ "$1" = "remove" ]; then' \
+            '  /usr/local/bin/hermes uninstall 2>/dev/null || true' \
+            '  rm -f /usr/lib/systemd/user/hermes.service' \
+            'fi' > "${PKG}/DEBIAN/postrm"
+          chmod 755 "${PKG}/DEBIAN/postrm"
+          dpkg-deb --root-owner-group -b "${PKG}" hermes.deb
+
+      - name: Install .deb
+        run: sudo dpkg -i hermes.deb
+
+      - name: Verify install
+        run: |
+          set -e
+          test -x /usr/local/bin/hermes
+          hermes version
+          test -f /usr/lib/systemd/user/hermes.service
+          grep -q 'Hermes-MOTD' /etc/profile.d/hermes-motd.sh
+
+      - name: Uninstall .deb
+        run: sudo dpkg --purge hermes
+
+      - name: Verify uninstall
+        run: |
+          set -e
+          test ! -f /usr/local/bin/hermes
+          test ! -f /usr/lib/systemd/user/hermes.service
+          test ! -f /etc/profile.d/hermes-motd.sh
