@@ -76,12 +76,7 @@ jobs:
         run: |
           mkdir -p dist
           if [ "${{ matrix.goos }}" = "darwin" ]; then
-            cd build/bin
-            if [ "${{ matrix.goarch }}" = "amd64" ]; then
-              tar czf ../../dist/hermes.app.tar.gz hermes.app
-            else
-              tar czf ../../dist/hermes_${{ matrix.goarch }}.app.tar.gz hermes.app
-            fi
+            cp build/bin/hermes.app/Contents/MacOS/hermes dist/hermes-darwin-${{ matrix.goarch }}
           elif [ "${{ matrix.goos }}" = "windows" ]; then
             :  # hermes.msi already in dist from Build MSI step
           elif [ "${{ matrix.goos }}" = "linux" ]; then
@@ -95,17 +90,17 @@ jobs:
           name: hermes-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
 
-  publish:
+  publish-deb:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
+          name: hermes-linux-amd64
           path: dist/
-          merge-multiple: true
 
       - name: Build .deb package
         working-directory: dist
@@ -145,12 +140,73 @@ jobs:
           cp "hermes_${VERSION}.deb" hermes.deb
           rm -rf "${PKG}"
 
-      - name: Generate checksums
-        working-directory: dist
-        run: sha256sum * > checksums.txt
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-deb
+          path: dist/hermes.deb
+
+  publish-pkg:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          pattern: hermes-darwin-*
+
+      - name: Build universal .pkg
+        run: |
+          lipo -create \
+            artifacts/hermes-darwin-amd64/hermes-darwin-amd64 \
+            artifacts/hermes-darwin-arm64/hermes-darwin-arm64 \
+            -output hermes
+          chmod 755 hermes
+          file hermes
+          PKGROOT="$(mktemp -d)"
+          mkdir -p "$PKGROOT/usr/local/bin"
+          cp hermes "$PKGROOT/usr/local/bin/hermes"
+          chmod 755 "$PKGROOT/usr/local/bin/hermes"
+          SCRIPTS="$(mktemp -d)"
+          printf '%s\n' '#!/bin/sh' \
+            '/usr/local/bin/hermes stop 2>/dev/null || true' \
+            'exit 0' > "$SCRIPTS/preinstall"
+          chmod 755 "$SCRIPTS/preinstall"
+          printf '%s\n' '#!/bin/sh' \
+            '/usr/local/bin/hermes install 2>/dev/null || true' \
+            'exit 0' > "$SCRIPTS/postinstall"
+          chmod 755 "$SCRIPTS/postinstall"
+          pkgbuild \
+            --identifier com.tseknet.hermes \
+            --version "${GITHUB_REF_NAME#v}" \
+            --root "$PKGROOT" \
+            --install-location / \
+            --scripts "$SCRIPTS" \
+            hermes.pkg
+          rm -rf "$PKGROOT" "$SCRIPTS"
+
+      - name: Upload .pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-pkg
+          path: hermes.pkg
+
+  release:
+    needs: [build, publish-deb, publish-pkg]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
 
       - name: Build changelog
-        id: changelog
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | grep -A1 "^${GITHUB_REF_NAME}$" | tail -1)
           if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$GITHUB_REF_NAME" ]; then
@@ -172,7 +228,6 @@ jobs:
         with:
           body_path: /tmp/release-notes.md
           files: |
-            dist/hermes.app.tar.gz
-            dist/hermes_arm64.app.tar.gz
+            dist/hermes.pkg
             dist/hermes.deb
             dist/hermes.msi
