@@ -178,7 +178,7 @@ func launchInSession(sessionID uint32, exe, cmdLine string) (string, error) {
 		nil,
 		false,
 		createUnicodeEnv|createNoWindow,
-		envBlock,
+		(*uint16)(unsafe.Pointer(envBlock)),
 		nil,
 		startupInfo,
 		&procInfo,
