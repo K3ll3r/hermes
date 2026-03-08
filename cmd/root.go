@@ -57,13 +57,12 @@ func buildRootCmd() *cobra.Command {
 		Long: `hermes renders a web UI (HTML/CSS/JS) inside a frameless webview.
 The same notification looks identical on Windows, macOS, and Linux.
 
-With no arguments, sends a demo notification to the service daemon
-(falls back to local display if the service is not running).
+With no arguments, renders a demo notification locally.
 
 Use 'hermes serve' to start the service daemon.
 Use 'hermes notify' to send a notification via the service.
 Use '--config' or '--local' to render directly without the service.`,
-		Example: `  hermes                                # demo (via service or local)
+		Example: `  hermes                                # demo (local)
   hermes --config notification.json     # send to service
   hermes --local '{"heading":"Test"}'   # render locally
   hermes notify '{"heading":"..."}'     # explicit service RPC
@@ -132,7 +131,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 		return sendToService(cfg)
 	}
 
-	// Mode 4: No config → demo (service or local fallback).
+	// Mode 4: No config → demo (local).
 	return runDemo()
 }
 
@@ -191,7 +190,7 @@ func tryEnqueue(cfg *config.NotificationConfig, originalErr error) bool {
 }
 
 // printResultAndExit prints the service result to stdout and exits with
-// the appropriate code. Shared by sendToService, runNotify, and runDemo.
+// the appropriate code. Shared by sendToService and runNotify.
 func printResultAndExit(r *client.NotifyResult) {
 	if r.Error != "" {
 		deck.Errorf("service: %s", r.Error)
