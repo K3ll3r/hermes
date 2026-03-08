@@ -69,16 +69,22 @@ func launchInUserSessions(exe string, args []string) {
 
 	launched := make(map[string]bool)
 	for _, sid := range sessions {
-		username, err := launchInSession(sid, exe, cmdLine)
+		username, err := resolveSessionUser(sid)
 		if err != nil {
 			deck.Warningf("session launch: session %d: %v", sid, err)
 			continue
 		}
-		if launched[username] {
+		if username != "" && launched[username] {
 			deck.Infof("session launch: session %d: skipped (already launched for %s)", sid, username)
 			continue
 		}
-		launched[username] = true
+		if err := launchInSession(sid, exe, cmdLine); err != nil {
+			deck.Warningf("session launch: session %d: %v", sid, err)
+			continue
+		}
+		if username != "" {
+			launched[username] = true
+		}
 		deck.Infof("session launch: started hermes serve in session %d (%s)", sid, username)
 	}
 }
@@ -112,36 +118,60 @@ func enumerateActiveSessions() ([]uint32, error) {
 	return active, nil
 }
 
-func launchInSession(sessionID uint32, exe, cmdLine string) (string, error) {
-	var impersonationToken windows.Handle
+const tokenMinAccess = windows.TOKEN_QUERY | windows.TOKEN_DUPLICATE | windows.TOKEN_ASSIGN_PRIMARY
+
+// resolveSessionUser returns the username for a session without launching anything.
+func resolveSessionUser(sessionID uint32) (string, error) {
+	var impToken windows.Handle
 	r1, _, err := procWTSQueryUserToken.Call(
 		uintptr(sessionID),
-		uintptr(unsafe.Pointer(&impersonationToken)),
+		uintptr(unsafe.Pointer(&impToken)),
 	)
 	if r1 == 0 {
 		return "", fmt.Errorf("WTSQueryUserToken: %w", err)
 	}
-	defer windows.CloseHandle(impersonationToken)
+	defer windows.CloseHandle(impToken)
+
+	var tok windows.Token
+	if err := windows.DuplicateTokenEx(
+		windows.Token(impToken), windows.TOKEN_QUERY, nil,
+		securityImperson, tokenPrimary, &tok,
+	); err != nil {
+		return "", fmt.Errorf("DuplicateTokenEx: %w", err)
+	}
+	defer tok.Close()
+
+	tu, err := tok.GetTokenUser()
+	if err != nil {
+		return "", fmt.Errorf("GetTokenUser: %w", err)
+	}
+	username, _, _, _ := tu.User.Sid.LookupAccount("")
+	return username, nil
+}
+
+func launchInSession(sessionID uint32, exe, cmdLine string) error {
+	var impToken windows.Handle
+	r1, _, err := procWTSQueryUserToken.Call(
+		uintptr(sessionID),
+		uintptr(unsafe.Pointer(&impToken)),
+	)
+	if r1 == 0 {
+		return fmt.Errorf("WTSQueryUserToken: %w", err)
+	}
+	defer windows.CloseHandle(impToken)
 
 	var userToken windows.Token
-	err = windows.DuplicateTokenEx(
-		windows.Token(impersonationToken),
-		windows.MAXIMUM_ALLOWED,
+	if err := windows.DuplicateTokenEx(
+		windows.Token(impToken),
+		tokenMinAccess,
 		nil,
 		securityImperson,
 		tokenPrimary,
 		&userToken,
-	)
-	if err != nil {
-		return "", fmt.Errorf("DuplicateTokenEx: %w", err)
+	); err != nil {
+		return fmt.Errorf("DuplicateTokenEx: %w", err)
 	}
 	defer userToken.Close()
-
-	tokenUser, err := userToken.GetTokenUser()
-	if err != nil {
-		return "", fmt.Errorf("GetTokenUser: %w", err)
-	}
-	username, _, _, _ := tokenUser.User.Sid.LookupAccount("")
 
 	var envBlock uintptr
 	r1, _, err = procCreateEnvBlock.Call(
@@ -150,7 +180,7 @@ func launchInSession(sessionID uint32, exe, cmdLine string) (string, error) {
 		0,
 	)
 	if r1 == 0 {
-		return "", fmt.Errorf("CreateEnvironmentBlock: %w", err)
+		return fmt.Errorf("CreateEnvironmentBlock: %w", err)
 	}
 	defer procDestroyEnvBlock.Call(envBlock)
 
@@ -164,47 +194,58 @@ func launchInSession(sessionID uint32, exe, cmdLine string) (string, error) {
 
 	cmdLinePtr, err := windows.UTF16PtrFromString(cmdLine)
 	if err != nil {
-		return "", fmt.Errorf("UTF16 command line: %w", err)
+		return fmt.Errorf("UTF16 command line: %w", err)
 	}
 	exePtr, err := windows.UTF16PtrFromString(exe)
 	if err != nil {
-		return "", fmt.Errorf("UTF16 exe path: %w", err)
+		return fmt.Errorf("UTF16 exe path: %w", err)
 	}
 
-	err = windows.CreateProcessAsUser(
-		userToken,
-		exePtr,
-		cmdLinePtr,
-		nil,
-		nil,
-		false,
+	if err := windows.CreateProcessAsUser(
+		userToken, exePtr, cmdLinePtr, nil, nil, false,
 		createUnicodeEnv|createNoWindow|createBreakawayJob,
-		(*uint16)(unsafe.Pointer(envBlock)),
-		nil,
-		startupInfo,
-		&procInfo,
-	)
-	if err != nil {
-		return "", fmt.Errorf("CreateProcessAsUser: %w", err)
+		(*uint16)(unsafe.Pointer(envBlock)), nil, startupInfo, &procInfo,
+	); err != nil {
+		return fmt.Errorf("CreateProcessAsUser: %w", err)
 	}
 
 	windows.CloseHandle(windows.Handle(procInfo.Thread))
 	windows.CloseHandle(windows.Handle(procInfo.Process))
-	return username, nil
+	return nil
 }
 
-// buildCommandLine constructs a Windows command line string with proper quoting.
-// Embedded double quotes are escaped per CreateProcess rules.
+// buildCommandLine constructs a Windows command line string with proper quoting
+// per CommandLineToArgvW rules: backslashes before a closing quote must be doubled.
 func buildCommandLine(exe string, args []string) (string, error) {
 	parts := make([]string, 0, 1+len(args))
-	parts = append(parts, `"`+exe+`"`)
+	parts = append(parts, quoteArg(exe))
 	for _, a := range args {
-		escaped := strings.ReplaceAll(a, `"`, `\"`)
-		if strings.ContainsAny(a, ` "\`) {
-			parts = append(parts, `"`+escaped+`"`)
-		} else {
-			parts = append(parts, a)
-		}
+		parts = append(parts, quoteArg(a))
 	}
 	return strings.Join(parts, " "), nil
+}
+
+func quoteArg(s string) string {
+	if s == "" || strings.ContainsAny(s, ` "\`) {
+		var b strings.Builder
+		b.WriteByte('"')
+		nbs := 0
+		for i := 0; i < len(s); i++ {
+			switch s[i] {
+			case '\\':
+				nbs++
+			case '"':
+				b.WriteString(strings.Repeat(`\`, nbs+1))
+				nbs = 0
+				b.WriteByte('"')
+			default:
+				nbs = 0
+				b.WriteByte(s[i])
+			}
+		}
+		b.WriteString(strings.Repeat(`\`, nbs))
+		b.WriteByte('"')
+		return b.String()
+	}
+	return s
 }

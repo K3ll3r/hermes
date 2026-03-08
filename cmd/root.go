@@ -388,12 +388,18 @@ func runUI(cfg *config.NotificationConfig) {
 // the default path. Creates the directory if it doesn't exist.
 // Returns "" on non-Windows (Wails uses a sensible default).
 func webview2DataPath() string {
+	if runtime.GOOS != "windows" {
+		return ""
+	}
 	d := os.Getenv("LOCALAPPDATA")
 	if d == "" {
 		return ""
 	}
 	p := filepath.Join(d, "hermes", "webview2-local")
-	os.MkdirAll(p, 0700)
+	if err := os.MkdirAll(p, 0700); err != nil {
+		deck.Warningf("webview2 data dir: %v", err)
+		return ""
+	}
 	return p
 }
 

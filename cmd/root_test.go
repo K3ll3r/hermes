@@ -171,11 +171,22 @@ func TestDoubleClickPath_ReachesDemo(t *testing.T) {
 
 func TestLoadFromArg_InvalidPath(t *testing.T) {
 	t.Parallel()
-	_, err := loadFromArg("/nonexistent/path/config.json")
+	badPath := filepath.Join(t.TempDir(), "nonexistent", "config.json")
+	_, err := loadFromArg(badPath)
 	if err == nil {
 		t.Fatal("expected error for nonexistent path")
 	}
 	if !strings.Contains(err.Error(), "not a file") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestWebView2DataPath_NonWindowsReturnsEmpty(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test only applies on non-Windows")
+	}
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	if p := webview2DataPath(); p != "" {
+		t.Errorf("expected empty string on %s, got %q", runtime.GOOS, p)
 	}
 }

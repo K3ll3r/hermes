@@ -47,6 +47,11 @@ func runInstall() error {
 			deck.Warningf("install: cannot resolve executable path: %v", exeErr)
 			return nil
 		}
+		exe = filepath.Clean(exe)
+		if _, err := os.Stat(exe); err != nil {
+			deck.Warningf("install: executable not found at %s: %v", exe, err)
+			return nil
+		}
 		args := []string{"serve"}
 		if runtime.GOOS == "windows" {
 			args = append(args, "--startup-delay", "5")

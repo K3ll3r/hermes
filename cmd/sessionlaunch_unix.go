@@ -163,6 +163,7 @@ func buildUserEnv(s userSession) []string {
 	case "linux":
 		env = append(env, fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", s.uid))
 		env = append(env, fmt.Sprintf("DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%d/bus", s.uid))
+		env = append(env, "DISPLAY=:0")
 	}
 
 	return env
