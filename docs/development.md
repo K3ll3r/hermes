@@ -204,6 +204,7 @@ Use the bundled templates in `testdata/` as starting points:
 | `short-defer-restart.json` | Short deferral (2m deadline, 3 max) for quick lifecycle testing |
 | `short-defer-deadline.json` | Very short deadline (1m) for testing auto-action |
 | `image-carousel.json` | Multi-slide image carousel |
+| `local-images.json` | Image carousel with local file path (run from project root) |
 | `install-with-watch.json` | Filesystem watch for install receipt validation |
 | `escalation-restart.json` | Escalation ladder: soft → firm → mandatory after repeated deferrals |
 | `action-chaining.json` | Result actions: user response triggers automatic follow-up |

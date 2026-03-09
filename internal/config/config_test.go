@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -372,11 +374,14 @@ func TestValidate_Images(t *testing.T) {
 			"https://b.com/2.png",
 		}},
 		{name: "invalid scheme", images: []string{"ftp://bad.com/x.png"}, wantErr: true, errSubstr: "images[0]"},
-		{name: "bare path", images: []string{"/tmp/slide.png"}, wantErr: true, errSubstr: "images[0]"},
-		{name: "mixed valid and invalid", images: []string{
+		{name: "local absolute path", images: []string{"/tmp/slide.png"}},
+		{name: "file URL", images: []string{"file:///tmp/slide.png"}},
+		{name: "relative path", images: []string{"./slide.png"}},
+		{name: "mixed valid", images: []string{
 			"https://ok.com/1.png",
-			"file:///etc/passwd",
-		}, wantErr: true, errSubstr: "images[1]"},
+			"file:///tmp/slide.png",
+			"/var/tmp/image.jpg",
+		}},
 	}
 
 	for _, tt := range tests {
@@ -485,6 +490,90 @@ func TestLoadJSON_Images(t *testing.T) {
 	}
 	if cfg.Images[0] != "https://a.com/1.png" {
 		t.Errorf("images[0] = %q", cfg.Images[0])
+	}
+}
+
+func TestResolveImagesForUI(t *testing.T) {
+	t.Parallel()
+
+	// Create a temp PNG file (minimal valid PNG header)
+	pngBytes := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	tmp := t.TempDir()
+	imgPath := filepath.Join(tmp, "test.png")
+	if err := os.WriteFile(imgPath, pngBytes, 0644); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		images  []string
+		wantErr bool
+	}{
+		{
+			name:    "nil config",
+			images:  nil,
+			wantErr: false,
+		},
+		{
+			name:    "empty images",
+			images:  []string{},
+			wantErr: false,
+		},
+		{
+			name:    "https passthrough",
+			images:  []string{"https://example.com/slide.png"},
+			wantErr: false,
+		},
+		{
+			name:    "data URI passthrough",
+			images:  []string{"data:image/png;base64,iVBORw0KGgo="},
+			wantErr: false,
+		},
+		{
+			name:    "local path resolved",
+			images:  []string{imgPath},
+			wantErr: false,
+		},
+		{
+			name:    "mixed",
+			images:  []string{"https://a.com/1.png", imgPath, "data:image/jpeg;base64,/9j/4AAQ"},
+			wantErr: false,
+		},
+		{
+			name:    "nonexistent file",
+			images:  []string{filepath.Join(tmp, "nonexistent.png")},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &NotificationConfig{Heading: "H", Message: "M", Images: tt.images}
+			resolved, err := ResolveImagesForUI(cfg)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if resolved == nil {
+				t.Fatal("resolved config is nil")
+			}
+			if len(tt.images) == 0 {
+				return
+			}
+			// Local paths should become data URIs
+			for i, img := range tt.images {
+				if isLocalImagePath(img) && !strings.HasPrefix(img, "data:") {
+					if !strings.HasPrefix(resolved.Images[i], "data:image/") {
+						t.Errorf("images[%d] = %q, want data URI", i, resolved.Images[i])
+					}
+				}
+			}
+		})
 	}
 }
 

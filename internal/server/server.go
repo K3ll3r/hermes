@@ -93,7 +93,11 @@ func (s *Server) GetUIConfig(_ context.Context, req *pb.GetUIConfigRequest) (*pb
 	if !ok {
 		return nil, fmt.Errorf("notification %s not found", req.NotificationId)
 	}
-	data, err := json.Marshal(cfg)
+	resolved, err := config.ResolveImagesForUI(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("resolve images: %w", err)
+	}
+	data, err := json.Marshal(resolved)
 	if err != nil {
 		return nil, fmt.Errorf("marshal config: %w", err)
 	}

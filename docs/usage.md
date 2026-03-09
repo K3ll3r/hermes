@@ -73,7 +73,7 @@ hermes accepts a single JSON or YAML config with these fields:
 | `id` | string | no | auto-generated | Unique notification ID for the service |
 | `defer_deadline` | string | no | `""` | Max deferral window (e.g., `"24h"`, `"7d"`) |
 | `max_defers` | int | no | `0` | Max number of deferrals (0 = unlimited) |
-| `images` | array | no | `[]` | HTTPS URLs or `data:image/` URIs for a carousel (max 5, no SVG data URIs) |
+| `images` | array | no | `[]` | HTTPS URLs, `data:image/` URIs, or local file paths for a carousel (max 5, no SVG data URIs) |
 | `watch_paths` | array | no | `[]` | Filesystem paths to monitor for changes (max 5, no `..` traversal) |
 | `dnd` | string | no | `"respect"` | Do Not Disturb behavior: `"respect"`, `"ignore"`, or `"skip"` |
 | `priority` | int | no | `5` | Delivery priority (0-10). Higher = shown first in queue drain |
@@ -174,7 +174,7 @@ Embed images (documentation slides, screenshots, diagrams) in the notification. 
   "message": "Review the changes below, then click Update.",
   "images": [
     "https://intranet.example.com/slides/macos-15.3-overview.png",
-    "https://intranet.example.com/slides/macos-15.3-timeline.png",
+    "/var/tmp/update-screenshot.png",
     "data:image/png;base64,iVBORw0KGgo..."
   ],
   "buttons": [
@@ -184,7 +184,7 @@ Embed images (documentation slides, screenshots, diagrams) in the notification. 
 }
 ```
 
-Images must be `https://` URLs or `data:image/` URIs (no SVG). Maximum 5 per notification.
+Images may be `https://` URLs, `data:image/` URIs, or local file paths (absolute, relative, or `file://` URLs). Local files are read and converted to data URIs when the notification is displayed. Relative paths are resolved from the current working directory. Maximum 5 per notification; each local file is limited to 2 MiB. SVG data URIs are not allowed.
 
 ### Filesystem watch
 
@@ -462,6 +462,7 @@ See `testdata/` for ready-to-use configs (JSON and YAML):
 - `short-defer-restart.json` — Short deferral (2m deadline, 3 max) for quick lifecycle testing
 - `short-defer-deadline.json` — Very short deadline (1m) for testing auto-action
 - `image-carousel.json` — Multi-slide image carousel with placeholder images
+- `local-images.json` — Image carousel with local file path (run from project root)
 - `install-with-watch.json` — Filesystem watch for install receipt validation
 - `escalation-restart.json` — Escalation ladder: soft → firm → mandatory after repeated deferrals
 - `action-chaining.json` — Result actions: user response triggers automatic follow-up

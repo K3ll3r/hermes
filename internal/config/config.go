@@ -2,10 +2,13 @@ package config
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"html"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -39,9 +42,9 @@ type NotificationConfig struct {
 	// 0 means unlimited (until deadline).
 	MaxDefers int `json:"max_defers,omitempty" yaml:"max_defers,omitempty"`
 
-	// Images is an ordered list of image URLs or base64 data URIs to display
-	// in a carousel above the message. When present the window auto-sizes
-	// taller to accommodate the images.
+	// Images is an ordered list of image URLs, base64 data URIs, or local file
+	// paths to display in a carousel above the message. Local paths and file://
+	// URLs are resolved to data URIs when the config is sent to the UI.
 	Images []string `json:"images,omitempty" yaml:"images,omitempty"`
 
 	// WatchPaths is a list of filesystem paths to monitor for changes.
@@ -370,10 +373,12 @@ func (c *NotificationConfig) Validate() error {
 			errs = append(errs, fmt.Sprintf("images[%d]: SVG data URIs are not allowed", i))
 		case strings.HasPrefix(lower, "data:image/"):
 			// valid raster data URI
+		case isLocalImagePath(img):
+			// valid local file path or file:// URL
 		default:
 			u, err := url.Parse(img)
 			if err != nil || u.Scheme != "https" {
-				errs = append(errs, fmt.Sprintf("images[%d]: must be an https URL or data:image/ URI (http is not allowed)", i))
+				errs = append(errs, fmt.Sprintf("images[%d]: must be an https URL, data:image/ URI, or local file path (http is not allowed)", i))
 			}
 		}
 	}
@@ -426,6 +431,146 @@ func (c *NotificationConfig) Validate() error {
 		return errors.New(strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// isLocalImagePath returns true if the string looks like a local file path or
+// file:// URL. Used during validation; actual file resolution happens in
+// ResolveImagesForUI.
+func isLocalImagePath(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	lower := strings.ToLower(s)
+	if strings.HasPrefix(lower, "file://") {
+		return true
+	}
+	// Absolute Unix path
+	if strings.HasPrefix(s, "/") {
+		return true
+	}
+	// Windows drive letter (e.g. C:\, C:/, or C:)
+	if len(s) >= 2 && s[1] == ':' {
+		if len(s) == 2 {
+			return true
+		}
+		return s[2] == '/' || s[2] == '\\'
+	}
+	// Relative path (./ or just filename)
+	if strings.HasPrefix(s, "./") || strings.HasPrefix(s, ".\\") {
+		return true
+	}
+	// Bare filename (no scheme, no leading slash)
+	if !strings.Contains(s, "://") && !strings.HasPrefix(lower, "data:") {
+		return true
+	}
+	return false
+}
+
+// MaxImageFileSize is the maximum size in bytes for a single image file read
+// from disk. Prevents excessive memory use when resolving local images.
+const MaxImageFileSize = 2 * 1024 * 1024 // 2 MiB
+
+// ResolveImagesForUI returns a copy of cfg with local file paths and file://
+// URLs in Images resolved to data URIs. HTTPS URLs and data URIs are passed
+// through unchanged. Relative paths are resolved relative to the current
+// working directory. Returns an error if any local file cannot be read.
+func ResolveImagesForUI(cfg *NotificationConfig) (*NotificationConfig, error) {
+	if cfg == nil || len(cfg.Images) == 0 {
+		return cfg, nil
+	}
+	resolved := make([]string, len(cfg.Images))
+	copy(resolved, cfg.Images)
+
+	for i, img := range cfg.Images {
+		path, ok := localImagePath(img)
+		if !ok {
+			continue // not a local path, keep as-is
+		}
+		dataURI, err := readFileAsDataURI(path)
+		if err != nil {
+			return nil, fmt.Errorf("images[%d]: %w", i, err)
+		}
+		resolved[i] = dataURI
+	}
+
+	out := *cfg
+	out.Images = resolved
+	return &out, nil
+}
+
+// localImagePath extracts a filesystem path from img if it's a local path or
+// file:// URL. Returns ("", false) if not a local path.
+func localImagePath(img string) (string, bool) {
+	img = strings.TrimSpace(img)
+	if img == "" {
+		return "", false
+	}
+	lower := strings.ToLower(img)
+	if strings.HasPrefix(lower, "file://") {
+		u, err := url.Parse(img)
+		if err != nil {
+			return "", false
+		}
+		if u.Scheme != "file" {
+			return "", false
+		}
+		// u.Path is the path component; on Windows file:///C:/x yields /C:/x
+		path := u.Path
+		if path == "" {
+			path = u.Opaque
+		}
+		// file:///C:/path -> strip leading slash for Windows
+		if len(path) > 2 && path[0] == '/' && path[2] == ':' {
+			path = path[1:]
+		}
+		return path, true
+	}
+	if isLocalImagePath(img) {
+		return img, true
+	}
+	return "", false
+}
+
+// readFileAsDataURI reads a file and returns a data URI. Path must be absolute
+// or relative to the current working directory.
+func readFileAsDataURI(path string) (string, error) {
+	if strings.Contains(path, "..") {
+		return "", fmt.Errorf("path traversal (..) not allowed")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve path: %w", err)
+	}
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		return "", fmt.Errorf("read file: %w", err)
+	}
+	if len(data) > MaxImageFileSize {
+		return "", fmt.Errorf("file too large (%d bytes, max %d)", len(data), MaxImageFileSize)
+	}
+	mime := mimeTypeFromExt(filepath.Ext(abs))
+	b64 := base64.StdEncoding.EncodeToString(data)
+	return fmt.Sprintf("data:%s;base64,%s", mime, b64), nil
+}
+
+func mimeTypeFromExt(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".bmp":
+		return "image/bmp"
+	case ".ico":
+		return "image/x-icon"
+	default:
+		return "image/png"
+	}
 }
 
 // deferRe matches "defer_Xh", "defer_Xd", "defer_Xm", "defer_Xs" where X is an integer.

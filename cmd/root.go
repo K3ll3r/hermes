@@ -118,11 +118,15 @@ func runRoot(_ *cobra.Command, args []string) error {
 			cfg = demoConfig()
 		}
 		prepareConfig(cfg)
-		if err := waitForDND(cfg); err != nil {
+		resolved, err := config.ResolveImagesForUI(cfg)
+		if err != nil {
+			return fmt.Errorf("resolve images: %w", err)
+		}
+		if err := waitForDND(resolved); err != nil {
 			return err
 		}
-		deck.Infof("notification: mode=local heading=%q buttons=%d dnd=%s", cfg.Heading, len(cfg.Buttons), cfg.DND)
-		runUI(cfg)
+		deck.Infof("notification: mode=local heading=%q buttons=%d dnd=%s", resolved.Heading, len(resolved.Buttons), resolved.DND)
+		runUI(resolved)
 		return nil
 	}
 
@@ -145,9 +149,13 @@ func runRoot(_ *cobra.Command, args []string) error {
 // generation (which runs the binary with no args).
 func runDemo() error {
 	cfg := demoConfig()
-	waitForDND(cfg)
-	deck.Infof("notification: mode=demo heading=%q timeout=%ds", cfg.Heading, cfg.TimeoutSeconds)
-	runUI(cfg)
+	resolved, err := config.ResolveImagesForUI(cfg)
+	if err != nil {
+		return fmt.Errorf("resolve images: %w", err)
+	}
+	waitForDND(resolved)
+	deck.Infof("notification: mode=demo heading=%q timeout=%ds", resolved.Heading, resolved.TimeoutSeconds)
+	runUI(resolved)
 	return nil
 }
 

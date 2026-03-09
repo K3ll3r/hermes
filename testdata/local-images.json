@@ -1,0 +1,10 @@
+{
+  "heading": "Local Image Example",
+  "message": "This notification uses images from local files. Run from the project root: hermes --local testdata/local-images.json",
+  "images": [
+    "testdata/sample.png"
+  ],
+  "buttons": [
+    {"label": "OK", "value": "ok", "style": "primary"}
+  ]
+}
