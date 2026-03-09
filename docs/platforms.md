@@ -22,7 +22,7 @@ The `hermes serve` daemon runs **per-user** in the desktop session. Run the inst
 |----------|---------|-----------|
 | Windows | **hermes.msi** | HKLM Run key at logon. `hermes install` also launches the daemon immediately in all active user sessions via Win32 `CreateProcessAsUser`. |
 | Linux | `sudo dpkg -i hermes.deb` | systemd user unit + profile.d. `hermes install` also launches the daemon immediately for all logged-in users via `SysProcAttr.Credential`. |
-| macOS | **hermes.pkg** / **hermes_arm64.pkg** | LaunchAgent in `/Library/LaunchAgents`; profile.d + zprofile snippet via postinstall. `hermes install` also launches the daemon immediately for all active users. |
+| macOS | **hermes.pkg** (universal, Intel + Apple Silicon) | LaunchAgent in `/Library/LaunchAgents`; profile.d + zprofile snippet via postinstall. `hermes install` also launches the daemon immediately for all active users. |
 
 **Silent / MDM install**
 
@@ -32,7 +32,7 @@ By default the Windows MSI shows the setup wizard; use the parameters below for 
 |----------|----------------|
 | Windows | `msiexec /i hermes.msi /qn` |
 | Linux | `sudo apt install -y ./hermes.deb` |
-| macOS | `installer -pkg hermes.pkg -target /` — no UI. Use `hermes_arm64.pkg` on ARM. |
+| macOS | `installer -pkg hermes.pkg -target /` (universal binary, works on both Intel and Apple Silicon) |
 
 See **[Architecture — Deployment](architecture.md#deployment)** for detail.
 

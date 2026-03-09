@@ -203,9 +203,10 @@ hermes/
 │   ├── root.go                    Root command, mode routing, runUI, respond
 │   ├── serve.go                   Per-user service daemon (gRPC server + manager)
 │   ├── launch.go                  Subprocess launcher for re-show
-│   ├── notify.go                  Send notification via gRPC
+│   ├── notify.go                  Send notification via gRPC (broadcasts when privileged)
 │   ├── list.go                    List active notifications
 │   ├── cancel.go                  Cancel a notification
+│   ├── stop.go                    Graceful daemon shutdown
 │   ├── inbox.go                   View notification history (UI or JSON)
 │   ├── install.go                 MOTD hook setup (called by package installers)
 │   ├── uninstall.go               MOTD hook cleanup
@@ -285,7 +286,7 @@ RPCs:
 | `Cancel` | CLI → Service | Cancel an active notification |
 | `List` | CLI → Service | List active notifications |
 | `ListHistory` | CLI → Service | Retrieve completed notification history |
-| `Shutdown` | CLI → Service | Graceful daemon shutdown (used by `hermes stop`) |
+| `Shutdown` | CLI → Service | Graceful daemon shutdown |
 
 ---
 

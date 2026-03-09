@@ -29,7 +29,7 @@ Download from [Releases](https://github.com/TsekNet/hermes/releases) and run the
 |----------|---------|
 | Windows | Execute `hermes.msi` |
 | Linux | `sudo dpkg -i hermes.deb` |
-| macOS | Open `hermes.pkg` (Intel) or `hermes_arm64.pkg` (Apple Silicon) |
+| macOS | Open `hermes.pkg` (universal, Intel + Apple Silicon) |
 
 ## Quick start
 
@@ -94,6 +94,7 @@ The service tracks deferrals per notification, persisted to disk. When the user 
 | **Quiet hours** | Time-based delivery suppression. Overnight ranges supported. |
 | **Localization** | `heading_localized` / `message_localized` maps + `--locale` flag for multi-language notifications. |
 | **Dependencies** | Sequential workflows: notification B waits for notification A to complete. |
+| **Broadcast** | Run as SYSTEM/root, auto-delivers to all active user sessions. No wrapper scripts needed. |
 
 ## Why web-based
 
@@ -109,6 +110,7 @@ The service tracks deferrals per notification, persisted to disk. When the user 
 - [Examples](assets/examples/) -- screenshots of every notification type
 - [Usage](docs/usage.md) -- JSON/YAML config, subcommands, flags, exit codes
 - [Architecture](docs/architecture.md) -- service daemon, gRPC, deployment, packages
+- [Broadcast](docs/broadcast.md) -- SYSTEM/root to user delivery
 - [Development](docs/development.md) -- building, testing, dev workflow
 - [Platforms](docs/platforms.md) -- webview engines, per-OS deployment
 

@@ -355,13 +355,14 @@ The second notification is held in `waiting_on_dependency` state until the first
 | Command | Description |
 |---------|-------------|
 | `hermes serve` | Start the gRPC service daemon |
-| `hermes notify [config]` | Send notification to service. Auto-broadcasts to all user sessions when run as SYSTEM/root. See **[Broadcast](broadcast.md)**. |
+| `hermes notify [config]` | Send notification to service (blocks for result). Broadcasts when run as SYSTEM/root ([details](broadcast.md)). |
 | `hermes list` | List active notifications |
 | `hermes cancel <id>` | Cancel an active notification |
 | `hermes inbox` | View notification history (opens inbox UI) |
 | `hermes inbox --json` | Print notification history as JSON to stdout |
 | `hermes install` | Configure MOTD hook and launch daemon in active user sessions (when elevated). Called by package postinstall. |
 | `hermes uninstall` | Remove MOTD hook. Called by package removal scripts. |
+| `hermes stop` | Graceful daemon shutdown (gRPC then fallback kill) |
 | `hermes demo` | Show a demo notification |
 | `hermes version` | Print version, build date, Go, and OS info |
 
